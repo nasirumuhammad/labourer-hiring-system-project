@@ -12,17 +12,17 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', unique: true })
   email!: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', select: false })
   password!: string;
 
   @Column({ type: 'enum', enum: UserRole })
-  userRole!: UserRole;
+  role!: UserRole;
   @CreateDateColumn()
-  createdAt!: string;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt!: string;
+  updatedAt!: Date;
 }

@@ -1,4 +1,4 @@
-import { User } from '@/user/entity/user.entity';
+import { User } from '@/user/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleAsyncOptions } from '@nestjs/typeorm';
 
@@ -19,7 +19,6 @@ export const dbConfig: TypeOrmModuleAsyncOptions = {
       database,
       entities: [User],
       synchronize: true,
-      autoLoadEntities: true,
     };
   },
 };
