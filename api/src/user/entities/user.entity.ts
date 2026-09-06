@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -20,9 +21,16 @@ export class User {
 
   @Column({ type: 'enum', enum: UserRole })
   role!: UserRole;
+
+  @Column({ type: 'int', default: 0 })
+  tokenVersion!: number;
+
   @CreateDateColumn()
   createdAt!: Date;
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
 }

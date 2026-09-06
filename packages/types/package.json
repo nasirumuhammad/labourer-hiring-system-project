@@ -1,5 +1,5 @@
 {
-  "name": "@labour-hiring/enums",
+  "name": "@labour-hiring/types",
   "version": "1.0.0",
   "private": true,
   "main": "./dist/index.js",
@@ -7,6 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput"
+  },
+  "dependencies": {
+    "@labour-hiring/enums": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

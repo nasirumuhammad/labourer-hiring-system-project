@@ -13,14 +13,34 @@ const app_service_1 = require("./app.service");
 const config_1 = require("@nestjs/config");
 const typeorm_1 = require("@nestjs/typeorm");
 const db_config_1 = require("./common/config/db.config");
+const jwt_config_1 = require("./common/config/jwt.config");
+const env_validation_1 = require("./common/config/env.validation");
+const event_emitter_1 = require("@nestjs/event-emitter");
+const common_module_1 = require("./auth/common/common.module");
+const user_module_1 = require("./user/user.module");
+const refresh_token_module_1 = require("./refresh-token/refresh-token.module");
+const auth_module_1 = require("./auth/auth.module");
+const nestjs_pino_1 = require("nestjs-pino");
+const logger_config_1 = require("./common/config/logger.config");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            config_1.ConfigModule.forRoot({ isGlobal: true }),
             typeorm_1.TypeOrmModule.forRootAsync(db_config_1.dbConfig),
+            config_1.ConfigModule.forRoot({
+                isGlobal: true,
+                load: [jwt_config_1.jwtConfig, db_config_1.dbEnv],
+                validate: env_validation_1.validateEnv,
+            }),
+            nestjs_pino_1.LoggerModule.forRoot(logger_config_1.loggerConfig),
+            event_emitter_1.EventEmitterModule.forRoot(),
+            typeorm_1.TypeOrmModule.forRootAsync(db_config_1.dbConfig),
+            common_module_1.CommonModule,
+            user_module_1.UserModule,
+            refresh_token_module_1.RefreshTokenModule,
+            auth_module_1.AuthModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],
