@@ -5,6 +5,6 @@ export const SystemEvents = {
 export class ForgotPasswordResetTokenEventPayload {
   constructor(
     public readonly email: string,
-    public readonly resetToken: string,
+    public readonly otp: string,
   ) {}
 }

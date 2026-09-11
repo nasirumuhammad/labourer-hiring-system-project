@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import { applyFieldError } from "@/lib/apply-field-error";
 import { ApiError } from "@/lib/api/api-error";
 import { toast } from "sonner";
+import { useFormSubmission } from "@/hooks/useform-submission";
 
 const signinSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -37,29 +38,29 @@ export function SigninForm() {
   const {
     control,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     setError,
   } = useForm<SigninValues>({
     resolver: zodResolver(signinSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const [isLoading, setisLoading] = useState(false);
+  const { isBusy, markRedirecting } = useFormSubmission();
 
   const onSubmit = async (data: SigninValues) => {
     try {
-      setisLoading(true);
       const response = await authApi.signin(data);
+      markRedirecting();
       toast.success(response?.message);
+      router.push("/dashboard");
     } catch (error) {
       if (error instanceof ApiError) {
         const handleError = applyFieldError(error, setError);
         if (!handleError) toast.error(error.message);
       }
-      setisLoading(false);
     }
   };
-
+  const busy = isBusy(isSubmitting);
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
@@ -96,8 +97,8 @@ export function SigninForm() {
             )}
           />
 
-          <Button type="submit" className="w-full">
-            {isLoading ? "Loading..." : "Sign In"}
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? "Loading..." : "Sign In"}
           </Button>
         </form>
       </CardContent>

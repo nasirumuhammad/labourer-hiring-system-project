@@ -18,6 +18,15 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRY: durationSchema,
   JWT_RESET_SECRET: z.string().min(1),
   JWT_RESET_EXPIRY: durationSchema,
+
+  ADMIN_EMAIL: z.string().email(),
+  ADMIN_PASSWORD: z.string().min(1),
+
+  RESEND_API_KEY: z.string().nonempty(),
+  RESEND_EMAIL: z.string().nonempty(),
+
+  REDIS_PORT: z.string().nonempty(),
+  REDIS_HOST: z.string().nonempty(),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

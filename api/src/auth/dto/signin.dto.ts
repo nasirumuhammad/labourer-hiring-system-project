@@ -5,6 +5,6 @@ export class SignInDto {
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(8, { message: 'Invalid email or password' })
   password!: string;
 }

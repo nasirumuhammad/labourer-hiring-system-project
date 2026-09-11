@@ -18,35 +18,44 @@ import { SignUpDto } from './dto/signup.dto';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { UserRole } from '@labour-hiring/enums';
+import { AuthMapper } from './mappers/auth.mapper';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly authMapper: AuthMapper,
+  ) {}
 
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
-  signup(@Body() dto: SignUpDto) {
-    return this.authService.signup(dto);
+  async signup(@Body() dto: SignUpDto) {
+    const tokens = await this.authService.signup(dto);
+    return this.authMapper.toTokenPairResponse(tokens);
   }
 
   @Post('signup/admin')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  signupAdmin(@Body() dto: SignUpDto, @CurrentUser() actor: Payload) {
-    return this.authService.signupAdmin(dto, actor.sub);
+  async signupAdmin(@Body() dto: SignUpDto, @CurrentUser() actor: Payload) {
+    return this.authMapper.toPublicUserResponse(
+      await this.authService.signupAdmin(dto, actor.sub),
+    );
   }
 
   @Post('signin')
   @HttpCode(HttpStatus.OK)
-  signin(@Body() dto: SignInDto) {
-    return this.authService.signin(dto);
+  async signin(@Body() dto: SignInDto) {
+    const tokens = await this.authService.signin(dto);
+    return this.authMapper.toTokenPairResponse(tokens);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refresh(dto.refreshToken);
+  async refresh(@Body() dto: RefreshTokenDto) {
+    const tokens = await this.authService.refresh(dto.refreshToken);
+    return this.authMapper.toTokenPairResponse(tokens);
   }
 
   @Post('forgot-password')

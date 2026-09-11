@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
-import { jwtConfig } from '@/common/config/jwt.config';
+import { jwtConfig } from '@/common/config/env.config';
 import { User } from '@/user/entities/user.entity';
 import { Payload, ResetPasswordPayload, TokenPair } from './types/payload.type';
 

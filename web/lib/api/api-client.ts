@@ -1,8 +1,10 @@
 import { ApiErrorResponse, ApiSuccessResponse } from "@/types/api";
 import { ApiError } from "./api-error";
 
-const BFF_AUTH_BASE_URL = process.env.BFF_AUTH_BASE_URL;
-const BFF_BASE_URL = process.env.BFF_BASE_URL;
+const BFF_AUTH_BASE_URL =
+  process.env.NEXT_PUBLIC_BFF_AUTH_BASE_URL ?? "/api/auth";
+const BFF_BASE_URL = process.env.NEXT_PUBLIC_BFF_BASE_URL ?? "/api/bff";
+
 type ParseResponse<T> = Promise<ApiSuccessResponse<T> | undefined>;
 
 async function parseResponse<T>(
@@ -39,10 +41,12 @@ async function request<T>(
 export async function authRequest<T>(
   path: string,
   body?: unknown,
+  method: "GET" | "POST" = "POST",
 ): Promise<ApiSuccessResponse<T> | undefined> {
   const response = await fetch(`${BFF_AUTH_BASE_URL}${path}`, {
     body: typeof body !== "undefined" ? JSON.stringify(body) : undefined,
-    method: "POST",
+    method,
+    cache: "no-store",
   });
   return parseResponse<T>(response);
 }

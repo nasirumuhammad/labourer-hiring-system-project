@@ -22,6 +22,9 @@ const refresh_token_module_1 = require("./refresh-token/refresh-token.module");
 const auth_module_1 = require("./auth/auth.module");
 const nestjs_pino_1 = require("nestjs-pino");
 const logger_config_1 = require("./common/config/logger.config");
+const core_1 = require("@nestjs/core");
+const response_interceptor_1 = require("./common/interceptors/response.interceptor");
+const global_exception_filter_1 = require("./common/filters/global-exception.filter");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -43,7 +46,11 @@ exports.AppModule = AppModule = __decorate([
             auth_module_1.AuthModule,
         ],
         controllers: [app_controller_1.AppController],
-        providers: [app_service_1.AppService],
+        providers: [
+            app_service_1.AppService,
+            { provide: core_1.APP_INTERCEPTOR, useClass: response_interceptor_1.ResponseInterceptor },
+            { provide: core_1.APP_FILTER, useClass: global_exception_filter_1.GlobalExceptionFilter },
+        ],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

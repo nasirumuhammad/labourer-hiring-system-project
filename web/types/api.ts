@@ -1,5 +1,5 @@
 export type ApiSuccessResponse<T> = {
-  message: string;
+  message?: string;
   data?: T;
 };
 

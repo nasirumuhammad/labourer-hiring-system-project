@@ -23,11 +23,6 @@ import { UserRole } from '@labour-hiring/enums';
 import { RefreshTokenService } from '@/refresh-token/refresh-token.service';
 import { SignUpDto } from './dto/signup.dto';
 
-export interface PublicUser {
-  id: string;
-  email: string;
-  role: UserRole;
-}
 @Injectable()
 export class AuthService {
   private readonly AUTH_FAILED_MESSAGE =
@@ -58,7 +53,7 @@ export class AuthService {
     return tokens;
   }
 
-  async signupAdmin(dto: SignUpDto, createdBy: string): Promise<PublicUser> {
+  async signupAdmin(dto: SignUpDto, createdBy: string): Promise<User> {
     const user = await this.userService.create(
       dto.email,
       dto.password,
@@ -68,7 +63,7 @@ export class AuthService {
       { email: maskEmail(user.email), createdBy },
       'admin account created',
     );
-    return { id: user.id, email: user.email, role: user.role };
+    return user;
   }
 
   async signin(dto: SignInDto): Promise<TokenPair> {

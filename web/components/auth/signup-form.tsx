@@ -16,30 +16,50 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+import { authApi } from "@/lib/api/auth";
+import { useEffect, useState } from "react";
+import { applyFieldError } from "@/lib/apply-field-error";
+import { ApiError } from "@/lib/api/api-error";
+import { toast } from "sonner";
+import { useFormSubmission } from "@/hooks/useform-submission";
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 export type SignupValues = z.infer<typeof signupSchema>;
 
 export function SignupForm() {
   const router = useRouter();
+  useEffect(() => {
+    router.prefetch("/dashboard");
+  }, [router]);
   const {
     control,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
+    setError,
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (data: SignupValues) => {
-    console.log("Signup:", data);
-    router.push("/signin");
+  const { isBusy, markRedirecting } = useFormSubmission();
+  const onSubmit = async (data: SignupValues) => {
+    try {
+      const response = await authApi.signup(data);
+      markRedirecting();
+      toast.success(response?.message ?? "Account created successfully");
+      router.push("/dashboard");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const handledFieldError = applyFieldError(error, setError);
+        if (!handledFieldError) toast.error(error.message);
+      }
+    }
   };
-
+  const busy = isBusy(isSubmitting);
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
@@ -76,8 +96,8 @@ export function SignupForm() {
             )}
           />
 
-          <Button type="submit" className="w-full">
-            Sign Up
+          <Button type="submit" className="w-full" disabled={busy}>
+            {busy ? "Loading..." : "Sign Up"}
           </Button>
         </form>
       </CardContent>

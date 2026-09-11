@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,14 +11,22 @@ import { UserRole } from '@labour-hiring/enums';
 import { User } from './entities/user.entity';
 import { HashingService } from '@/auth/common/services/hashing.service';
 import { maskEmail } from '@/auth/common/utils/mask.util';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
+  private readonly admin_email: string;
+  private readonly admin_password: string;
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
     private readonly hashingService: HashingService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.admin_email = this.configService.getOrThrow<string>('ADMIN_EMAIL');
+    this.admin_password =
+      this.configService.getOrThrow<string>('ADMIN_PASSWORD');
+  }
 
   async findById(id: string): Promise<User | null> {
     return this.userRepository.findOneBy({ id });

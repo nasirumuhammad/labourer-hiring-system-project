@@ -13,5 +13,5 @@ export const authApi = {
   signup: (payload: SignupValues) =>
     authRequest<TokenPairResponse>("/signup", payload),
   signout: () => authRequest<string>("/signout"),
-  me: () => authRequest("/me"),
+  me: () => authRequest("/me", undefined, "GET"),
 };
