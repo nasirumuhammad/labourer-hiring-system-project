@@ -16,11 +16,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+import { authApi } from "@/lib/api/auth";
+import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api/api-error";
+import { toast } from "sonner";
 
 const resetSchema = z
   .object({
-    newPassword: z.string().min(6, "Minimum 6 characters"),
-    confirmPassword: z.string().min(6, "Minimum 6 characters"),
+    newPassword: z.string().min(8, "Minimum 8 characters"),
+    confirmPassword: z.string().min(8, "Minimum 8 characters"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",
@@ -33,6 +37,13 @@ export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
+  const token = searchParams.get("token") || "";
+
+  useEffect(() => {
+    if (!email || !token) {
+      router.push("/forgot-password");
+    }
+  }, [email, token, router]);
 
   const {
     control,
@@ -43,9 +54,21 @@ export function ResetPasswordForm() {
     defaultValues: { newPassword: "", confirmPassword: "" },
   });
 
-  const onSubmit = (data: ResetValues) => {
-    console.log("Reset password for", email, data.newPassword);
-    router.push("/signin?reset=success");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const onSubmit = async (data: ResetValues) => {
+    try {
+      setIsLoading(true);
+      await authApi.resetPassword({ token, password: data.newPassword });
+      router.push("/signin?reset=success");
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Something went wrong. Please try again.",
+      );
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -84,8 +107,8 @@ export function ResetPasswordForm() {
             )}
           />
 
-          <Button type="submit" className="w-full">
-            Reset Password
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Resetting..." : "Reset Password"}
           </Button>
         </form>
       </CardContent>

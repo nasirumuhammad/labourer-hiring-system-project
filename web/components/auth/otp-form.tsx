@@ -13,6 +13,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field, FieldError } from "@/components/ui/field";
+import { authApi } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/api-error";
+import { toast } from "sonner";
 
 export function OtpForm() {
   const router = useRouter();
@@ -22,6 +25,7 @@ export function OtpForm() {
   const [otp, setOtp] = useState<string[]>(Array(6).fill(""));
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -50,24 +54,37 @@ export function OtpForm() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const code = otp.join("");
     if (code.length !== 6) {
       setError("Please enter all 6 digits");
       return;
     }
-    setLoading(true);
-    // Simulate OTP verification – demo code: 123456
-    setTimeout(() => {
+    try {
+      setLoading(true);
+      const response = await authApi.verifyOtp({ email, otp: code });
+      const resetToken = response?.data?.resetToken;
+      router.push(
+        `/reset?email=${encodeURIComponent(email)}&token=${encodeURIComponent(resetToken ?? "")}`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : "Invalid or expired code",
+      );
       setLoading(false);
-      if (code === "123456") {
-        router.push(
-          `/forgot-password/reset?email=${encodeURIComponent(email)}`,
-        );
-      } else {
-        setError("Invalid OTP. Try 123456 for demo.");
-      }
-    }, 1000);
+    }
+  };
+
+  const handleResend = async () => {
+    try {
+      setResending(true);
+      await authApi.resendOtp({ email });
+      toast.success("A new code has been sent");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to resend code");
+    } finally {
+      setResending(false);
+    }
   };
 
   return (
@@ -113,12 +130,12 @@ export function OtpForm() {
           ← Try again
         </Link>
         <button
-          onClick={() => {
-            alert("New OTP sent (demo: 123456)");
-          }}
-          className="text-sm text-primary hover:underline"
+          type="button"
+          onClick={handleResend}
+          disabled={resending}
+          className="text-sm text-primary hover:underline disabled:opacity-50"
         >
-          Resend code
+          {resending ? "Sending..." : "Resend code"}
         </button>
       </CardFooter>
     </Card>

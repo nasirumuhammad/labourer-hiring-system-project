@@ -32,3 +32,10 @@ export const envConfig = registerAs('env', () => ({
     port: process.env.DB_PORT,
   },
 }));
+
+// jwt.strategy.ts, token.service.ts, and auth.module.ts read JWT secrets via
+// this name (previously a separate registerAs('jwt', ...) in jwt.config.ts).
+// envConfig already carries the identical access/refresh/reset shape under
+// the 'env' namespace already loaded into ConfigModule, so alias it rather
+// than registering a second namespace.
+export const jwtConfig = envConfig;

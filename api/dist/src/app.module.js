@@ -13,7 +13,6 @@ const app_service_1 = require("./app.service");
 const config_1 = require("@nestjs/config");
 const typeorm_1 = require("@nestjs/typeorm");
 const db_config_1 = require("./common/config/db.config");
-const jwt_config_1 = require("./common/config/jwt.config");
 const env_validation_1 = require("./common/config/env.validation");
 const event_emitter_1 = require("@nestjs/event-emitter");
 const common_module_1 = require("./auth/common/common.module");
@@ -25,6 +24,10 @@ const logger_config_1 = require("./common/config/logger.config");
 const core_1 = require("@nestjs/core");
 const response_interceptor_1 = require("./common/interceptors/response.interceptor");
 const global_exception_filter_1 = require("./common/filters/global-exception.filter");
+const bullmq_1 = require("@nestjs/bullmq");
+const bull_config_1 = require("./common/config/bull.config");
+const env_config_1 = require("./common/config/env.config");
+const redis_module_1 = require("./common/redis/redis.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -34,16 +37,18 @@ exports.AppModule = AppModule = __decorate([
             typeorm_1.TypeOrmModule.forRootAsync(db_config_1.dbConfig),
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
-                load: [jwt_config_1.jwtConfig, db_config_1.dbEnv],
+                load: [env_config_1.envConfig],
                 validate: env_validation_1.validateEnv,
             }),
             nestjs_pino_1.LoggerModule.forRoot(logger_config_1.loggerConfig),
             event_emitter_1.EventEmitterModule.forRoot(),
             typeorm_1.TypeOrmModule.forRootAsync(db_config_1.dbConfig),
+            redis_module_1.RedisModule,
             common_module_1.CommonModule,
             user_module_1.UserModule,
             refresh_token_module_1.RefreshTokenModule,
             auth_module_1.AuthModule,
+            bullmq_1.BullModule.forRootAsync(bull_config_1.bullConfig),
         ],
         controllers: [app_controller_1.AppController],
         providers: [

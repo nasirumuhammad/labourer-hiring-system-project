@@ -1,12 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { EmailJobPayload } from '../constants/email.constant';
 import { SystemJob } from '@/common/constants/system-jobs.constant';
 import { maskEmail } from '@/auth/common/utils/mask.util';
+import { MailJobPayload } from '../constants/mail.constant';
 
-export abstract class BaseOtpQueueListener<T extends EmailJobPayload> {
+export abstract class BaseOtpQueueListener<T extends MailJobPayload> {
   constructor(
-    protected readonly queue: Queue<EmailJobPayload>,
+    protected readonly queue: Queue<MailJobPayload>,
     protected logger: Logger,
   ) {}
 

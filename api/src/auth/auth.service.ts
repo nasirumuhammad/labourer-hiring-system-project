@@ -22,6 +22,7 @@ import { RefreshToken } from '@/refresh-token/entities/refresh-token.entity';
 import { UserRole } from '@labour-hiring/enums';
 import { RefreshTokenService } from '@/refresh-token/refresh-token.service';
 import { SignUpDto } from './dto/signup.dto';
+import { OtpService } from '@/otp/otp.service';
 
 @Injectable()
 export class AuthService {
@@ -37,6 +38,7 @@ export class AuthService {
     private readonly refreshTokenService: RefreshTokenService,
     private readonly eventEmitter: EventEmitter2,
     private readonly dataSource: DataSource,
+    private readonly otpService: OtpService,
   ) {}
 
   async signup(dto: SignUpDto): Promise<TokenPair> {
@@ -150,7 +152,7 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<string> {
-    const RESPONSE = 'If the email exists, a password reset link will be sent';
+    const RESPONSE = 'If the email exists, a verification code will be sent';
 
     const user = await this.userService.findByEmail(email);
     if (!user) {
@@ -161,11 +163,14 @@ export class AuthService {
       return RESPONSE;
     }
 
-    const resetToken = this.tokenService.generateResetToken(user);
+    const otp = await this.otpService.generateAndStore(
+      email,
+      'forgot-password',
+    );
 
     this.eventEmitter.emit(
       SystemEvents.SEND_FORGOT_PASSWORD_RESET_TOKEN,
-      new ForgotPasswordResetTokenEventPayload(email, resetToken),
+      new ForgotPasswordResetTokenEventPayload(email, otp),
     );
     this.logger.log(
       { email: maskEmail(email) },
@@ -173,6 +178,61 @@ export class AuthService {
     );
 
     return RESPONSE;
+  }
+
+  async resendOtp(email: string): Promise<string> {
+    const RESPONSE =
+      'If the email exists, a new verification code will be sent';
+
+    const user = await this.userService.findByEmail(email);
+    if (!user) {
+      this.logger.warn(
+        { email: maskEmail(email) },
+        'otp resend requested for unregistered email',
+      );
+      return RESPONSE;
+    }
+
+    const otp = await this.otpService.generateAndStore(
+      email,
+      'forgot-password',
+    );
+
+    this.eventEmitter.emit(
+      SystemEvents.RESEND_FORGOT_PASSWORD_OTP,
+      new ForgotPasswordResetTokenEventPayload(email, otp),
+    );
+    this.logger.log(
+      { email: maskEmail(email) },
+      `${SystemEvents.RESEND_FORGOT_PASSWORD_OTP} event emitted`,
+    );
+
+    return RESPONSE;
+  }
+
+  async verifyOtp(email: string, otp: string): Promise<{ resetToken: string }> {
+    const user = await this.userService.findByEmail(email);
+    if (!user) {
+      this.logger.warn(
+        { email: maskEmail(email) },
+        'otp verification attempted for unregistered email',
+      );
+      throw new BadRequestException('Invalid or expired verification code.');
+    }
+
+    await this.otpService.verifyAndDelete({
+      email,
+      otp,
+      purpose: 'forgot-password',
+    });
+
+    const resetToken = this.tokenService.generateResetToken(user);
+    this.logger.log(
+      { email: maskEmail(email) },
+      'otp verified, reset token issued',
+    );
+
+    return { resetToken };
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<string> {

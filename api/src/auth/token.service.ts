@@ -44,8 +44,8 @@ export class TokenService {
   generateResetToken(user: User): string {
     const payload: ResetPasswordPayload = { sub: user.id, email: user.email };
     const token = this.jwtService.sign(payload, {
-      secret: this.jwt.refresh.secret,
-      expiresIn: this.jwt.refresh.expiresIn as any,
+      secret: this.jwt.reset.secret,
+      expiresIn: this.jwt.reset.expiresIn as any,
     });
     this.logger.debug({ sub: user.id }, 'reset token generated');
     return token;

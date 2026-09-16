@@ -8,12 +8,13 @@ import {
 } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import { CreateEmailOptions, Resend } from 'resend';
+import { RESEND_CLIENT } from './constants/mail.constant';
 
 @Injectable()
 export class Mailservice {
   private readonly logger = new Logger(Mailservice.name);
   constructor(
-    private readonly resend: Resend,
+    @Inject(RESEND_CLIENT) private readonly resend: Resend,
     @Inject(envConfig.KEY)
     private readonly env: ConfigType<typeof envConfig>,
   ) {}

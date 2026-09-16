@@ -10,12 +10,16 @@ import { TokenService } from './token.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RefreshTokenModule } from '@/refresh-token/refresh-token.module';
 import { AuthMapper } from './mappers/auth.mapper';
+import { OtpModule } from '@/otp/otp.module';
+import { MailModule } from '@/mail/mail.module';
 
 @Module({
   imports: [
     UserModule,
     RefreshTokenModule,
     PassportModule,
+    OtpModule,
+    MailModule,
     JwtModule.registerAsync({
       inject: [jwtConfig.KEY],
       useFactory: (jwt: ConfigType<typeof jwtConfig>) => ({

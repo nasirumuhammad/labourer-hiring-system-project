@@ -1,0 +1,1179 @@
+diff --git a/api/src/app.module.ts b/api/src/app.module.ts
+index 2c0dbfe..a1c1652 100644
+--- a/api/src/app.module.ts
++++ b/api/src/app.module.ts
+@@ -18,6 +18,9 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
+ import { BullModule } from '@nestjs/bullmq';
+ import { bullConfig } from './common/config/bull.config';
+ import { envConfig } from './common/config/env.config';
++import { RedisModule } from './common/redis/redis.module';
++import { JobModule } from './job/job.module';
++import { ApplicationModule } from './application/application.module';
+ 
+ @Module({
+   imports: [
+@@ -30,10 +33,13 @@ import { envConfig } from './common/config/env.config';
+     LoggerModule.forRoot(loggerConfig),
+     EventEmitterModule.forRoot(),
+     TypeOrmModule.forRootAsync(dbConfig),
++    RedisModule,
+     CommonModule,
+     UserModule,
+     RefreshTokenModule,
+     AuthModule,
++    JobModule,
++    ApplicationModule,
+     BullModule.forRootAsync(bullConfig),
+   ],
+   controllers: [AppController],
+diff --git a/api/src/application/application.controller.ts b/api/src/application/application.controller.ts
+new file mode 100644
+index 0000000..a9efa2c
+--- /dev/null
++++ b/api/src/application/application.controller.ts
+@@ -0,0 +1,41 @@
++import {
++  Body,
++  Controller,
++  Get,
++  Param,
++  ParseUUIDPipe,
++  Post,
++  Query,
++  UseGuards,
++} from '@nestjs/common';
++import { UserRole } from '@labour-hiring/enums';
++import { ApplicationService } from './application.service';
++import { ApplyJobDto } from './dto/apply-job.dto';
++import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
++import { RolesGuard } from '@/common/guards/roles.guard';
++import { Roles } from '@/common/decorators/roles.decorator';
++import { CurrentUser } from '@/auth/decorators/current-user.decorator';
++import { Payload } from '@labour-hiring/types';
++import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
++
++@Controller()
++export class ApplicationController {
++  constructor(private readonly applicationService: ApplicationService) {}
++
++  @UseGuards(JwtAuthGuard, RolesGuard)
++  @Roles(UserRole.LABOURER)
++  @Post('jobs/:id/apply')
++  apply(
++    @Param('id', ParseUUIDPipe) jobId: string,
++    @CurrentUser() user: Payload,
++    @Body() dto: ApplyJobDto,
++  ) {
++    return this.applicationService.apply(jobId, user.sub, dto);
++  }
++
++  @UseGuards(JwtAuthGuard)
++  @Get('applications/me')
++  findMine(@CurrentUser() user: Payload, @Query() query: PaginationQueryDto) {
++    return this.applicationService.findMine(user.sub, query);
++  }
++}
+diff --git a/api/src/application/application.module.ts b/api/src/application/application.module.ts
+new file mode 100644
+index 0000000..411d1a3
+--- /dev/null
++++ b/api/src/application/application.module.ts
+@@ -0,0 +1,13 @@
++import { Module } from '@nestjs/common';
++import { TypeOrmModule } from '@nestjs/typeorm';
++import { Application } from './entities/application.entity';
++import { ApplicationService } from './application.service';
++import { ApplicationController } from './application.controller';
++import { JobModule } from '@/job/job.module';
++
++@Module({
++  imports: [TypeOrmModule.forFeature([Application]), JobModule],
++  controllers: [ApplicationController],
++  providers: [ApplicationService],
++})
++export class ApplicationModule {}
+diff --git a/api/src/application/application.service.ts b/api/src/application/application.service.ts
+new file mode 100644
+index 0000000..09bcf85
+--- /dev/null
++++ b/api/src/application/application.service.ts
+@@ -0,0 +1,95 @@
++import { ConflictException, Injectable, Logger } from '@nestjs/common';
++import { InjectRepository } from '@nestjs/typeorm';
++import { Repository } from 'typeorm';
++import { Application } from './entities/application.entity';
++import { ApplyJobDto } from './dto/apply-job.dto';
++import { JobService } from '@/job/job.service';
++import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
++
++export type SafeApplication = Omit<
++  Application,
++  'bankName' | 'bankAccountNumber' | 'bvn'
++>;
++
++export interface PaginatedApplications {
++  data: SafeApplication[];
++  total: number;
++  page: number;
++  limit: number;
++}
++
++@Injectable()
++export class ApplicationService {
++  private readonly logger = new Logger(ApplicationService.name);
++
++  constructor(
++    @InjectRepository(Application)
++    private readonly applicationRepository: Repository<Application>,
++    private readonly jobService: JobService,
++  ) {}
++
++  async apply(
++    jobId: string,
++    applicantId: string,
++    dto: ApplyJobDto,
++  ): Promise<SafeApplication> {
++    const job = await this.jobService.findOne(jobId);
++
++    const existing = await this.applicationRepository.findOneBy({
++      jobId: job.id,
++      applicantId,
++    });
++    if (existing) {
++      this.logger.warn(
++        { jobId: job.id, applicantId },
++        'duplicate application attempted',
++      );
++      throw new ConflictException('You have already applied to this job');
++    }
++
++    const application = this.applicationRepository.create({
++      jobId: job.id,
++      applicantId,
++      bankName: dto.bankName,
++      bankAccountNumber: dto.bankAccountNumber,
++      bvn: dto.bvn,
++    });
++    const saved = await this.applicationRepository.save(application);
++
++    this.logger.log(
++      { jobId: job.id, applicantId, applicationId: saved.id },
++      'job application submitted',
++    );
++
++    return this.toSafeApplication(saved);
++  }
++
++  async findMine(
++    applicantId: string,
++    query: PaginationQueryDto,
++  ): Promise<PaginatedApplications> {
++    const [data, total] = await this.applicationRepository.findAndCount({
++      where: { applicantId },
++      relations: { job: true },
++      order: { createdAt: 'DESC' },
++      skip: query.skip,
++      take: query.limit,
++    });
++
++    return {
++      data: data.map((application) => this.toSafeApplication(application)),
++      total,
++      page: query.page,
++      limit: query.limit,
++    };
++  }
++
++  // Bank details are select:false so ordinary finds already omit them, but
++  // .create()/.save() still returns whatever was set on the in-memory
++  // entity — strip them explicitly before anything reaches a controller.
++  private toSafeApplication(application: Application): SafeApplication {
++    // eslint-disable-next-line @typescript-eslint/no-unused-vars
++    const { bankName, bankAccountNumber, bvn, ...safe } = application;
++    return safe;
++  }
++}
+diff --git a/api/src/application/dto/apply-job.dto.ts b/api/src/application/dto/apply-job.dto.ts
+new file mode 100644
+index 0000000..542facd
+--- /dev/null
++++ b/api/src/application/dto/apply-job.dto.ts
+@@ -0,0 +1,15 @@
++import { IsString, Length } from 'class-validator';
++
++export class ApplyJobDto {
++  @IsString()
++  @Length(2, 100)
++  bankName!: string;
++
++  @IsString()
++  @Length(10, 10)
++  bankAccountNumber!: string;
++
++  @IsString()
++  @Length(11, 11)
++  bvn!: string;
++}
+diff --git a/api/src/application/entities/application.entity.ts b/api/src/application/entities/application.entity.ts
+new file mode 100644
+index 0000000..893eead
+--- /dev/null
++++ b/api/src/application/entities/application.entity.ts
+@@ -0,0 +1,65 @@
++import {
++  Column,
++  CreateDateColumn,
++  DeleteDateColumn,
++  Entity,
++  Index,
++  JoinColumn,
++  ManyToOne,
++  PrimaryGeneratedColumn,
++  UpdateDateColumn,
++} from 'typeorm';
++import { ApplicationStatus } from '@labour-hiring/enums';
++import { User } from '@/user/entities/user.entity';
++import { Job } from '@/job/entities/job.entity';
++
++@Entity()
++@Index(['jobId', 'applicantId'], { unique: true })
++export class Application {
++  @PrimaryGeneratedColumn('uuid')
++  id!: string;
++
++  @Column({ type: 'uuid' })
++  jobId!: string;
++
++  @ManyToOne(() => Job, { onDelete: 'CASCADE' })
++  @JoinColumn({ name: 'jobId' })
++  job!: Job;
++
++  @Column({ type: 'uuid' })
++  applicantId!: string;
++
++  @ManyToOne(() => User, { onDelete: 'CASCADE' })
++  @JoinColumn({ name: 'applicantId' })
++  applicant!: User;
++
++  @Index()
++  @Column({
++    type: 'enum',
++    enum: ApplicationStatus,
++    default: ApplicationStatus.PENDING,
++  })
++  status!: ApplicationStatus;
++
++  // Bank details are sensitive (payout information + BVN) — excluded from
++  // default selects, same as User.password. Fetch explicitly via
++  // addSelect() only where actually needed (e.g. an employer initiating
++  // payout), and never pass these through the logger.
++  @Column({ type: 'varchar', select: false })
++  bankName!: string;
++
++  @Column({ type: 'varchar', select: false })
++  bankAccountNumber!: string;
++
++  @Column({ type: 'varchar', select: false })
++  bvn!: string;
++
++  @CreateDateColumn()
++  createdAt!: Date;
++
++  @UpdateDateColumn()
++  updatedAt!: Date;
++
++  @DeleteDateColumn()
++  deletedAt?: Date;
++}
+diff --git a/api/src/auth/auth.controller.ts b/api/src/auth/auth.controller.ts
+index be88a1c..d8f7bc4 100644
+--- a/api/src/auth/auth.controller.ts
++++ b/api/src/auth/auth.controller.ts
+@@ -15,6 +15,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
+ import { CurrentUser } from './decorators/current-user.decorator';
+ import { Payload } from './types/payload.type';
+ import { SignUpDto } from './dto/signup.dto';
++import { VerifyOtpDto } from './dto/verify-otp.dto';
++import { ResendOtpDto } from './dto/resend-otp.dto';
+ import { RolesGuard } from '@/common/guards/roles.guard';
+ import { Roles } from '@/common/decorators/roles.decorator';
+ import { UserRole } from '@labour-hiring/enums';
+@@ -64,6 +66,18 @@ export class AuthController {
+     return this.authService.forgotPassword(dto.email);
+   }
+ 
++  @Post('verify-otp')
++  @HttpCode(HttpStatus.OK)
++  verifyOtp(@Body() dto: VerifyOtpDto) {
++    return this.authService.verifyOtp(dto.email, dto.otp);
++  }
++
++  @Post('resend-otp')
++  @HttpCode(HttpStatus.OK)
++  resendOtp(@Body() dto: ResendOtpDto) {
++    return this.authService.resendOtp(dto.email);
++  }
++
+   @Post('reset-password')
+   @HttpCode(HttpStatus.OK)
+   resetPassword(@Body() dto: ResetPasswordDto) {
+diff --git a/api/src/auth/auth.module.ts b/api/src/auth/auth.module.ts
+index 5e7b560..4a3b427 100644
+--- a/api/src/auth/auth.module.ts
++++ b/api/src/auth/auth.module.ts
+@@ -10,12 +10,16 @@ import { TokenService } from './token.service';
+ import { JwtStrategy } from './strategies/jwt.strategy';
+ import { RefreshTokenModule } from '@/refresh-token/refresh-token.module';
+ import { AuthMapper } from './mappers/auth.mapper';
++import { OtpModule } from '@/otp/otp.module';
++import { MailModule } from '@/mail/mail.module';
+ 
+ @Module({
+   imports: [
+     UserModule,
+     RefreshTokenModule,
+     PassportModule,
++    OtpModule,
++    MailModule,
+     JwtModule.registerAsync({
+       inject: [jwtConfig.KEY],
+       useFactory: (jwt: ConfigType<typeof jwtConfig>) => ({
+diff --git a/api/src/auth/auth.service.ts b/api/src/auth/auth.service.ts
+index a307052..305390b 100644
+--- a/api/src/auth/auth.service.ts
++++ b/api/src/auth/auth.service.ts
+@@ -22,6 +22,7 @@ import { RefreshToken } from '@/refresh-token/entities/refresh-token.entity';
+ import { UserRole } from '@labour-hiring/enums';
+ import { RefreshTokenService } from '@/refresh-token/refresh-token.service';
+ import { SignUpDto } from './dto/signup.dto';
++import { OtpService } from '@/otp/otp.service';
+ 
+ @Injectable()
+ export class AuthService {
+@@ -37,6 +38,7 @@ export class AuthService {
+     private readonly refreshTokenService: RefreshTokenService,
+     private readonly eventEmitter: EventEmitter2,
+     private readonly dataSource: DataSource,
++    private readonly otpService: OtpService,
+   ) {}
+ 
+   async signup(dto: SignUpDto): Promise<TokenPair> {
+@@ -150,7 +152,8 @@ export class AuthService {
+   }
+ 
+   async forgotPassword(email: string): Promise<string> {
+-    const RESPONSE = 'If the email exists, a password reset link will be sent';
++    const RESPONSE =
++      'If the email exists, a verification code will be sent';
+ 
+     const user = await this.userService.findByEmail(email);
+     if (!user) {
+@@ -161,11 +164,14 @@ export class AuthService {
+       return RESPONSE;
+     }
+ 
+-    const resetToken = this.tokenService.generateResetToken(user);
++    const otp = await this.otpService.generateAndStore(
++      email,
++      'forgot-password',
++    );
+ 
+     this.eventEmitter.emit(
+       SystemEvents.SEND_FORGOT_PASSWORD_RESET_TOKEN,
+-      new ForgotPasswordResetTokenEventPayload(email, resetToken),
++      new ForgotPasswordResetTokenEventPayload(email, otp),
+     );
+     this.logger.log(
+       { email: maskEmail(email) },
+@@ -175,6 +181,61 @@ export class AuthService {
+     return RESPONSE;
+   }
+ 
++  async resendOtp(email: string): Promise<string> {
++    const RESPONSE =
++      'If the email exists, a new verification code will be sent';
++
++    const user = await this.userService.findByEmail(email);
++    if (!user) {
++      this.logger.warn(
++        { email: maskEmail(email) },
++        'otp resend requested for unregistered email',
++      );
++      return RESPONSE;
++    }
++
++    const otp = await this.otpService.generateAndStore(
++      email,
++      'forgot-password',
++    );
++
++    this.eventEmitter.emit(
++      SystemEvents.RESEND_FORGOT_PASSWORD_OTP,
++      new ForgotPasswordResetTokenEventPayload(email, otp),
++    );
++    this.logger.log(
++      { email: maskEmail(email) },
++      `${SystemEvents.RESEND_FORGOT_PASSWORD_OTP} event emitted`,
++    );
++
++    return RESPONSE;
++  }
++
++  async verifyOtp(email: string, otp: string): Promise<{ resetToken: string }> {
++    const user = await this.userService.findByEmail(email);
++    if (!user) {
++      this.logger.warn(
++        { email: maskEmail(email) },
++        'otp verification attempted for unregistered email',
++      );
++      throw new BadRequestException('Invalid or expired verification code.');
++    }
++
++    await this.otpService.verifyAndDelete({
++      email,
++      otp,
++      purpose: 'forgot-password',
++    });
++
++    const resetToken = this.tokenService.generateResetToken(user);
++    this.logger.log(
++      { email: maskEmail(email) },
++      'otp verified, reset token issued',
++    );
++
++    return { resetToken };
++  }
++
+   async resetPassword(dto: ResetPasswordDto): Promise<string> {
+     const { sub, email } = this.verifyResetToken(dto.token);
+ 
+diff --git a/api/src/auth/common/constants/system-events.constant.ts b/api/src/auth/common/constants/system-events.constant.ts
+index 6cfc385..a0ff4cb 100644
+--- a/api/src/auth/common/constants/system-events.constant.ts
++++ b/api/src/auth/common/constants/system-events.constant.ts
+@@ -1,5 +1,6 @@
+ export const SystemEvents = {
+   SEND_FORGOT_PASSWORD_RESET_TOKEN: 'auth.forgot-password.reset-token-issued',
++  RESEND_FORGOT_PASSWORD_OTP: 'auth.forgot-password.otp-resend-requested',
+ } as const;
+ 
+ export class ForgotPasswordResetTokenEventPayload {
+diff --git a/api/src/auth/dto/resend-otp.dto.ts b/api/src/auth/dto/resend-otp.dto.ts
+new file mode 100644
+index 0000000..a08f95f
+--- /dev/null
++++ b/api/src/auth/dto/resend-otp.dto.ts
+@@ -0,0 +1,6 @@
++import { IsEmail } from 'class-validator';
++
++export class ResendOtpDto {
++  @IsEmail()
++  email!: string;
++}
+diff --git a/api/src/auth/dto/verify-otp.dto.ts b/api/src/auth/dto/verify-otp.dto.ts
+new file mode 100644
+index 0000000..57bb068
+--- /dev/null
++++ b/api/src/auth/dto/verify-otp.dto.ts
+@@ -0,0 +1,10 @@
++import { IsEmail, IsString, Length } from 'class-validator';
++
++export class VerifyOtpDto {
++  @IsEmail()
++  email!: string;
++
++  @IsString()
++  @Length(6, 6)
++  otp!: string;
++}
+diff --git a/api/src/auth/token.service.ts b/api/src/auth/token.service.ts
+index d9fd535..8c64b8b 100644
+--- a/api/src/auth/token.service.ts
++++ b/api/src/auth/token.service.ts
+@@ -44,8 +44,8 @@ export class TokenService {
+   generateResetToken(user: User): string {
+     const payload: ResetPasswordPayload = { sub: user.id, email: user.email };
+     const token = this.jwtService.sign(payload, {
+-      secret: this.jwt.refresh.secret,
+-      expiresIn: this.jwt.refresh.expiresIn as any,
++      secret: this.jwt.reset.secret,
++      expiresIn: this.jwt.reset.expiresIn as any,
+     });
+     this.logger.debug({ sub: user.id }, 'reset token generated');
+     return token;
+diff --git a/api/src/common/config/db.config.ts b/api/src/common/config/db.config.ts
+index aaf6a91..23aad55 100644
+--- a/api/src/common/config/db.config.ts
++++ b/api/src/common/config/db.config.ts
+@@ -2,6 +2,8 @@ import { User } from '@/user/entities/user.entity';
+ import { TypeOrmModuleAsyncOptions } from '@nestjs/typeorm';
+ import { ConfigType } from '@nestjs/config';
+ import { RefreshToken } from '@/refresh-token/entities/refresh-token.entity';
++import { Job } from '@/job/entities/job.entity';
++import { Application } from '@/application/entities/application.entity';
+ import { envConfig } from './env.config';
+ 
+ export const dbConfig: TypeOrmModuleAsyncOptions = {
+@@ -17,7 +19,7 @@ export const dbConfig: TypeOrmModuleAsyncOptions = {
+       username,
+       password,
+       database,
+-      entities: [User, RefreshToken],
++      entities: [User, RefreshToken, Job, Application],
+       synchronize: true,
+     };
+   },
+diff --git a/api/src/common/config/env.config.ts b/api/src/common/config/env.config.ts
+index fc9e2e0..7749d79 100644
+--- a/api/src/common/config/env.config.ts
++++ b/api/src/common/config/env.config.ts
+@@ -32,3 +32,5 @@ export const envConfig = registerAs('env', () => ({
+     port: process.env.DB_PORT,
+   },
+ }));
++
++export const jwtConfig = envConfig;
+diff --git a/api/src/common/dto/pagination-query.dto.ts b/api/src/common/dto/pagination-query.dto.ts
+new file mode 100644
+index 0000000..2473c7c
+--- /dev/null
++++ b/api/src/common/dto/pagination-query.dto.ts
+@@ -0,0 +1,21 @@
++import { Type } from 'class-transformer';
++import { IsInt, IsOptional, Max, Min } from 'class-validator';
++
++export class PaginationQueryDto {
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  page: number = 1;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(1)
++  @Max(100)
++  limit: number = 10;
++
++  get skip(): number {
++    return (this.page - 1) * this.limit;
++  }
++}
+diff --git a/api/src/common/redis/redis.module.ts b/api/src/common/redis/redis.module.ts
+new file mode 100644
+index 0000000..9415733
+--- /dev/null
++++ b/api/src/common/redis/redis.module.ts
+@@ -0,0 +1,23 @@
++import { Global, Module } from '@nestjs/common';
++import { ConfigType } from '@nestjs/config';
++import Redis from 'ioredis';
++import { envConfig } from '../config/env.config';
++
++export const REDIS_CLIENT = 'REDIS_CLIENT';
++
++@Global()
++@Module({
++  providers: [
++    {
++      provide: REDIS_CLIENT,
++      inject: [envConfig.KEY],
++      useFactory: (env: ConfigType<typeof envConfig>) =>
++        new Redis({
++          host: env.redis.host,
++          port: Number(env.redis.port),
++        }),
++    },
++  ],
++  exports: [REDIS_CLIENT],
++})
++export class RedisModule {}
+diff --git a/api/src/job/dto/create-job.dto.ts b/api/src/job/dto/create-job.dto.ts
+new file mode 100644
+index 0000000..8861e6d
+--- /dev/null
++++ b/api/src/job/dto/create-job.dto.ts
+@@ -0,0 +1,52 @@
++import { Type } from 'class-transformer';
++import {
++  ArrayNotEmpty,
++  IsArray,
++  IsEnum,
++  IsInt,
++  IsNumberString,
++  IsOptional,
++  IsString,
++  Min,
++  MinLength,
++} from 'class-validator';
++import { PaymentType } from '@labour-hiring/enums';
++
++export class CreateJobDto {
++  @IsString()
++  @MinLength(3)
++  title!: string;
++
++  @IsString()
++  @MinLength(3)
++  companyName!: string;
++
++  @IsString()
++  @MinLength(10)
++  description!: string;
++
++  @IsOptional()
++  @IsString()
++  location?: string;
++
++  @IsEnum(PaymentType)
++  paymentType!: PaymentType;
++
++  @IsNumberString()
++  minPay!: string;
++
++  @IsNumberString()
++  maxPay!: string;
++
++  @IsOptional()
++  @Type(() => Number)
++  @IsInt()
++  @Min(0)
++  minExperienceYears?: number;
++
++  @IsOptional()
++  @IsArray()
++  @ArrayNotEmpty()
++  @IsString({ each: true })
++  skills?: string[];
++}
+diff --git a/api/src/job/dto/query-jobs.dto.ts b/api/src/job/dto/query-jobs.dto.ts
+new file mode 100644
+index 0000000..0dd43c2
+--- /dev/null
++++ b/api/src/job/dto/query-jobs.dto.ts
+@@ -0,0 +1,29 @@
++import { Transform } from 'class-transformer';
++import { IsArray, IsEnum, IsIn, IsOptional, IsString } from 'class-validator';
++import { PaymentType } from '@labour-hiring/enums';
++import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
++
++const toArray = ({ value }: { value: unknown }) =>
++  value === undefined ? undefined : Array.isArray(value) ? value : [value];
++
++export class QueryJobsDto extends PaginationQueryDto {
++  @IsOptional()
++  @IsString()
++  search?: string;
++
++  @IsOptional()
++  @Transform(toArray)
++  @IsArray()
++  @IsEnum(PaymentType, { each: true })
++  paymentType?: PaymentType[];
++
++  @IsOptional()
++  @Transform(toArray)
++  @IsArray()
++  @IsString({ each: true })
++  skills?: string[];
++
++  @IsOptional()
++  @IsIn(['newest', 'oldest'])
++  sort: 'newest' | 'oldest' = 'newest';
++}
+diff --git a/api/src/job/entities/job.entity.ts b/api/src/job/entities/job.entity.ts
+new file mode 100644
+index 0000000..0af582c
+--- /dev/null
++++ b/api/src/job/entities/job.entity.ts
+@@ -0,0 +1,69 @@
++import {
++  Column,
++  CreateDateColumn,
++  DeleteDateColumn,
++  Entity,
++  Index,
++  JoinColumn,
++  ManyToOne,
++  PrimaryGeneratedColumn,
++  UpdateDateColumn,
++} from 'typeorm';
++import { JobStatus, PaymentType } from '@labour-hiring/enums';
++import { User } from '@/user/entities/user.entity';
++
++@Entity()
++export class Job {
++  @PrimaryGeneratedColumn('uuid')
++  id!: string;
++
++  @Column({ type: 'varchar' })
++  title!: string;
++
++  // No separate employer-profile module exists yet, so the display name for
++  // the posting employer lives directly on the job for now.
++  @Column({ type: 'varchar' })
++  companyName!: string;
++
++  @Column({ type: 'text' })
++  description!: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  location?: string;
++
++  @Column({ type: 'uuid' })
++  employerId!: string;
++
++  @ManyToOne(() => User, { onDelete: 'CASCADE' })
++  @JoinColumn({ name: 'employerId' })
++  employer!: User;
++
++  @Index()
++  @Column({ type: 'enum', enum: PaymentType })
++  paymentType!: PaymentType;
++
++  @Column({ type: 'numeric', precision: 12, scale: 2 })
++  minPay!: string;
++
++  @Column({ type: 'numeric', precision: 12, scale: 2 })
++  maxPay!: string;
++
++  @Column({ type: 'int', default: 0 })
++  minExperienceYears!: number;
++
++  @Column({ type: 'text', array: true, default: () => "'{}'" })
++  skills!: string[];
++
++  @Index()
++  @Column({ type: 'enum', enum: JobStatus, default: JobStatus.OPEN })
++  status!: JobStatus;
++
++  @CreateDateColumn()
++  createdAt!: Date;
++
++  @UpdateDateColumn()
++  updatedAt!: Date;
++
++  @DeleteDateColumn()
++  deletedAt?: Date;
++}
+diff --git a/api/src/job/job.controller.ts b/api/src/job/job.controller.ts
+new file mode 100644
+index 0000000..f30f965
+--- /dev/null
++++ b/api/src/job/job.controller.ts
+@@ -0,0 +1,41 @@
++import {
++  Body,
++  Controller,
++  Get,
++  Param,
++  ParseUUIDPipe,
++  Post,
++  Query,
++  UseGuards,
++} from '@nestjs/common';
++import { UserRole } from '@labour-hiring/enums';
++import { JobService } from './job.service';
++import { QueryJobsDto } from './dto/query-jobs.dto';
++import { CreateJobDto } from './dto/create-job.dto';
++import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
++import { RolesGuard } from '@/common/guards/roles.guard';
++import { Roles } from '@/common/decorators/roles.decorator';
++import { CurrentUser } from '@/auth/decorators/current-user.decorator';
++import { Payload } from '@labour-hiring/types';
++
++@Controller('jobs')
++export class JobController {
++  constructor(private readonly jobService: JobService) {}
++
++  @Get()
++  findAll(@Query() query: QueryJobsDto) {
++    return this.jobService.findAll(query);
++  }
++
++  @Get(':id')
++  findOne(@Param('id', ParseUUIDPipe) id: string) {
++    return this.jobService.findOne(id);
++  }
++
++  @UseGuards(JwtAuthGuard, RolesGuard)
++  @Roles(UserRole.EMPLOYER)
++  @Post()
++  create(@CurrentUser() user: Payload, @Body() dto: CreateJobDto) {
++    return this.jobService.create(user.sub, dto);
++  }
++}
+diff --git a/api/src/job/job.module.ts b/api/src/job/job.module.ts
+new file mode 100644
+index 0000000..3eb04c5
+--- /dev/null
++++ b/api/src/job/job.module.ts
+@@ -0,0 +1,13 @@
++import { Module } from '@nestjs/common';
++import { TypeOrmModule } from '@nestjs/typeorm';
++import { Job } from './entities/job.entity';
++import { JobService } from './job.service';
++import { JobController } from './job.controller';
++
++@Module({
++  imports: [TypeOrmModule.forFeature([Job])],
++  controllers: [JobController],
++  providers: [JobService],
++  exports: [JobService],
++})
++export class JobModule {}
+diff --git a/api/src/job/job.service.ts b/api/src/job/job.service.ts
+new file mode 100644
+index 0000000..175c861
+--- /dev/null
++++ b/api/src/job/job.service.ts
+@@ -0,0 +1,136 @@
++import { Injectable, Logger, NotFoundException } from '@nestjs/common';
++import { InjectRepository } from '@nestjs/typeorm';
++import { Repository } from 'typeorm';
++import { JobStatus, PaymentType } from '@labour-hiring/enums';
++import { Job } from './entities/job.entity';
++import { CreateJobDto } from './dto/create-job.dto';
++import { QueryJobsDto } from './dto/query-jobs.dto';
++
++export interface FacetCount<T = string> {
++  value: T;
++  count: number;
++}
++
++export interface JobFacets {
++  paymentType: FacetCount<PaymentType>[];
++  skills: FacetCount[];
++}
++
++export interface PaginatedJobs {
++  data: Job[];
++  total: number;
++  page: number;
++  limit: number;
++  facets: JobFacets;
++}
++
++@Injectable()
++export class JobService {
++  private readonly logger = new Logger(JobService.name);
++
++  constructor(
++    @InjectRepository(Job) private readonly jobRepository: Repository<Job>,
++  ) {}
++
++  async create(employerId: string, dto: CreateJobDto): Promise<Job> {
++    const job = this.jobRepository.create({ ...dto, employerId });
++    const saved = await this.jobRepository.save(job);
++
++    this.logger.debug({ jobId: saved.id, employerId }, 'job posted');
++
++    return saved;
++  }
++
++  async findAll(query: QueryJobsDto): Promise<PaginatedJobs> {
++    const qb = this.buildFilteredQuery(query);
++
++    qb.orderBy('job.createdAt', query.sort === 'oldest' ? 'ASC' : 'DESC')
++      .skip(query.skip)
++      .take(query.limit);
++
++    const [data, total] = await qb.getManyAndCount();
++    const facets = await this.getFacets();
++
++    return { data, total, page: query.page, limit: query.limit, facets };
++  }
++
++  async findOne(id: string): Promise<Job> {
++    const job = await this.jobRepository.findOne({
++      where: { id, status: JobStatus.OPEN },
++    });
++
++    if (!job) {
++      throw new NotFoundException('Job not found');
++    }
++
++    return job;
++  }
++
++  private buildFilteredQuery(query: QueryJobsDto) {
++    const qb = this.jobRepository
++      .createQueryBuilder('job')
++      .where('job.status = :status', { status: JobStatus.OPEN });
++
++    if (query.search) {
++      qb.andWhere(
++        '(job.title ILIKE :search OR job.description ILIKE :search)',
++        { search: `%${query.search}%` },
++      );
++    }
++
++    if (query.paymentType?.length) {
++      qb.andWhere('job.paymentType IN (:...paymentTypes)', {
++        paymentTypes: query.paymentType,
++      });
++    }
++
++    if (query.skills?.length) {
++      qb.andWhere('job.skills && :skills', { skills: query.skills });
++    }
++
++    return qb;
++  }
++
++  // Facet counts reflect all open jobs, not the currently active filters —
++  // a simplification for now. A fully "smart" faceted search (counts that
++  // exclude the facet's own filter but respect the others) can follow once
++  // there's real traffic to justify the extra query complexity.
++  private async getFacets(): Promise<JobFacets> {
++    const paymentTypeCounts = await this.jobRepository
++      .createQueryBuilder('job')
++      .select('job.paymentType', 'paymentType')
++      .addSelect('COUNT(*)', 'count')
++      .where('job.status = :status', { status: JobStatus.OPEN })
++      .groupBy('job.paymentType')
++      .getRawMany<{ paymentType: PaymentType; count: string }>();
++
++    const skillCounts = await this.jobRepository
++      .createQueryBuilder()
++      .select('skill')
++      .addSelect('COUNT(*)', 'count')
++      .from(
++        (qb) =>
++          qb
++            .subQuery()
++            .select('unnest(job.skills)', 'skill')
++            .from(Job, 'job')
++            .where('job.status = :status', { status: JobStatus.OPEN }),
++        'expanded',
++      )
++      .groupBy('skill')
++      .orderBy('count', 'DESC')
++      .setParameter('status', JobStatus.OPEN)
++      .getRawMany<{ skill: string; count: string }>();
++
++    return {
++      paymentType: paymentTypeCounts.map((row) => ({
++        value: row.paymentType,
++        count: Number(row.count),
++      })),
++      skills: skillCounts.map((row) => ({
++        value: row.skill,
++        count: Number(row.count),
++      })),
++    };
++  }
++}
+diff --git a/api/src/mail/listeners/forgot-password.listener.ts b/api/src/mail/listeners/forgot-password.listener.ts
+index 075a78b..0cd16ce 100644
+--- a/api/src/mail/listeners/forgot-password.listener.ts
++++ b/api/src/mail/listeners/forgot-password.listener.ts
+@@ -3,18 +3,22 @@ import { EmailJobPayload } from '../constants/email.constant';
+ import { InjectQueue } from '@nestjs/bullmq';
+ import { SystemQueues } from '@/common/constants/system-queue.constant';
+ import { Queue } from 'bullmq';
+-import { Logger } from '@nestjs/common';
++import { Injectable, Logger } from '@nestjs/common';
+ import { OnEvent } from '@nestjs/event-emitter';
+-import { ForgotPasswordResetTokenEventPayload } from '@/auth/common/constants/system-events.constant';
++import {
++  ForgotPasswordResetTokenEventPayload,
++  SystemEvents,
++} from '@/auth/common/constants/system-events.constant';
+ import { SystemJobs } from '@/common/constants/system-jobs.constant';
+ import { maskEmail } from '@/auth/common/utils/mask.util';
+ 
++@Injectable()
+ export class ForgotPasswordRequestListener extends BaseOtpQueueListener<EmailJobPayload> {
+   constructor(@InjectQueue(SystemQueues.EMAIL) queue: Queue) {
+     super(queue, new Logger(ForgotPasswordRequestListener.name));
+   }
+ 
+-  @OnEvent(SystemQueues.EMAIL)
++  @OnEvent(SystemEvents.SEND_FORGOT_PASSWORD_RESET_TOKEN)
+   async handle(event: ForgotPasswordResetTokenEventPayload) {
+     try {
+       await this.enqueueJob(SystemJobs.SEND_FORGOT_PASSWORD_OTP, event);
+@@ -32,4 +36,23 @@ export class ForgotPasswordRequestListener extends BaseOtpQueueListener<EmailJob
+       );
+     }
+   }
++
++  @OnEvent(SystemEvents.RESEND_FORGOT_PASSWORD_OTP)
++  async handleResend(event: ForgotPasswordResetTokenEventPayload) {
++    try {
++      await this.enqueueJob(SystemJobs.RESEND_OTP, event);
++      this.logger.log(
++        {
++          jobName: SystemJobs.RESEND_OTP,
++          email: maskEmail(event.email),
++        },
++        'Enqueued resend OTP job',
++      );
++    } catch (error: any) {
++      this.logger.error(
++        { email: maskEmail(event.email), err: error },
++        'Failed to process resend OTP request',
++      );
++    }
++  }
+ }
+diff --git a/api/src/mail/mail.constants.ts b/api/src/mail/mail.constants.ts
+new file mode 100644
+index 0000000..885109f
+--- /dev/null
++++ b/api/src/mail/mail.constants.ts
+@@ -0,0 +1 @@
++export const RESEND_CLIENT = 'RESEND_CLIENT';
+diff --git a/api/src/mail/mail.module.ts b/api/src/mail/mail.module.ts
+index 4f707a9..140eb13 100644
+--- a/api/src/mail/mail.module.ts
++++ b/api/src/mail/mail.module.ts
+@@ -1,16 +1,22 @@
+ import { Module } from '@nestjs/common';
+ import { Mailservice } from './mail.service';
++import { MailProcessor } from './mail.processor';
+ import { BullModule } from '@nestjs/bullmq';
+-import { ConfigService, ConfigType } from '@nestjs/config';
++import { ConfigType } from '@nestjs/config';
+ import { Resend } from 'resend';
+ import { envConfig } from '@/common/config/env.config';
++import { SystemQueues } from '@/common/constants/system-queue.constant';
++import { ForgotPasswordRequestListener } from './listeners/forgot-password.listener';
++import { RESEND_CLIENT } from './mail.constants';
+ 
+ @Module({
+-  imports: [BullModule.registerQueue({ name: 'email' })],
++  imports: [BullModule.registerQueue({ name: SystemQueues.EMAIL })],
+   providers: [
+     Mailservice,
++    MailProcessor,
++    ForgotPasswordRequestListener,
+     {
+-      provide: 'REDIS_CLIENT',
++      provide: RESEND_CLIENT,
+       inject: [envConfig.KEY],
+       useFactory: (env: ConfigType<typeof envConfig>) => {
+         const apiKey = env.resend.apiKey;
+diff --git a/api/src/mail/mail.service.ts b/api/src/mail/mail.service.ts
+index 720d367..a43f43a 100644
+--- a/api/src/mail/mail.service.ts
++++ b/api/src/mail/mail.service.ts
+@@ -8,12 +8,13 @@ import {
+ } from '@nestjs/common';
+ import { ConfigType } from '@nestjs/config';
+ import { CreateEmailOptions, Resend } from 'resend';
++import { RESEND_CLIENT } from './mail.constants';
+ 
+ @Injectable()
+ export class Mailservice {
+   private readonly logger = new Logger(Mailservice.name);
+   constructor(
+-    private readonly resend: Resend,
++    @Inject(RESEND_CLIENT) private readonly resend: Resend,
+     @Inject(envConfig.KEY)
+     private readonly env: ConfigType<typeof envConfig>,
+   ) {}
+diff --git a/api/src/otp/otp.module.ts b/api/src/otp/otp.module.ts
+new file mode 100644
+index 0000000..1a55959
+--- /dev/null
++++ b/api/src/otp/otp.module.ts
+@@ -0,0 +1,8 @@
++import { Module } from '@nestjs/common';
++import { OtpService } from './otp.service';
++
++@Module({
++  providers: [OtpService],
++  exports: [OtpService],
++})
++export class OtpModule {}
+diff --git a/api/src/otp/otp.service.ts b/api/src/otp/otp.service.ts
+index 2315026..8e60d1f 100644
+--- a/api/src/otp/otp.service.ts
++++ b/api/src/otp/otp.service.ts
+@@ -6,19 +6,20 @@ import {
+   Injectable,
+   Logger,
+ } from '@nestjs/common';
+-import { ConfigService } from '@nestjs/config';
+ import Redis from 'ioredis';
+ import { randomInt } from 'node:crypto';
++import { REDIS_CLIENT } from '@/common/redis/redis.module';
+ 
+ export type Purpose = 'verify-email' | 'forgot-password' | 'login';
+ 
+ @Injectable()
+ export class OtpService {
+-  private logger = new Logger(OtpService.name);
++  private readonly logger = new Logger(OtpService.name);
++  private readonly OTP_TTL_SECONDS = 5 * 60;
++
+   constructor(
+-    @Inject('REDIS_CLIENT') private redis: Redis,
+-    private hashingService: HashingService,
+-    private configService: ConfigService,
++    @Inject(REDIS_CLIENT) private readonly redis: Redis,
++    private readonly hashingService: HashingService,
+   ) {}
+ 
+   private generate() {
+@@ -31,9 +32,13 @@ export class OtpService {
+ 
+   async generateAndStore(email: string, purpose: Purpose) {
+     const key = this.generateKey(email, purpose);
+-    const ttl = Number(this.configService.getOrThrow<string>('TTL'));
+     const otp = this.generate();
+-    await this.redis.set(key, await this.hashingService.hash(otp), 'EX', ttl);
++    await this.redis.set(
++      key,
++      await this.hashingService.hash(otp),
++      'EX',
++      this.OTP_TTL_SECONDS,
++    );
+     return otp;
+   }
+ 
+diff --git a/packages/enums/src/application-status.enum.ts b/packages/enums/src/application-status.enum.ts
+new file mode 100644
+index 0000000..f310631
+--- /dev/null
++++ b/packages/enums/src/application-status.enum.ts
+@@ -0,0 +1,6 @@
++export enum ApplicationStatus {
++  PENDING = "pending",
++  ACCEPTED = "accepted",
++  REJECTED = "rejected",
++  WITHDRAWN = "withdrawn",
++}
+diff --git a/packages/enums/src/index.ts b/packages/enums/src/index.ts
+index b1c6a80..5c632a2 100644
+--- a/packages/enums/src/index.ts
++++ b/packages/enums/src/index.ts
+@@ -1 +1,4 @@
+ export * from "./user-role.enum";
++export * from "./job-status.enum";
++export * from "./payment-type.enum";
++export * from "./application-status.enum";
+diff --git a/packages/enums/src/job-status.enum.ts b/packages/enums/src/job-status.enum.ts
+new file mode 100644
+index 0000000..4f1ff1f
+--- /dev/null
++++ b/packages/enums/src/job-status.enum.ts
+@@ -0,0 +1,5 @@
++export enum JobStatus {
++  OPEN = "open",
++  CLOSED = "closed",
++  DRAFT = "draft",
++}
+diff --git a/packages/enums/src/payment-type.enum.ts b/packages/enums/src/payment-type.enum.ts
+new file mode 100644
+index 0000000..dc58945
+--- /dev/null
++++ b/packages/enums/src/payment-type.enum.ts
+@@ -0,0 +1,4 @@
++export enum PaymentType {
++  FIXED = "fixed",
++  HOURLY = "hourly",
++}

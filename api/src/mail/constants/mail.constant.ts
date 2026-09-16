@@ -1,8 +1,10 @@
 import { JobsOptions } from 'bullmq';
 
-export type EmailJobPayload = { email: string; otp: string };
+export const RESEND_CLIENT = 'RESEND_CLIENT';
 
-export const emailJobConfig: JobsOptions = {
+export type MailJobPayload = { email: string; otp: string };
+
+export const MailJobConfig: JobsOptions = {
   attempts: 3,
   backoff: {
     type: 'exponential',

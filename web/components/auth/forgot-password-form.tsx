@@ -16,6 +16,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+import { authApi } from "@/lib/api/auth";
+import { useState } from "react";
+import { applyFieldError } from "@/lib/apply-field-error";
+import { ApiError } from "@/lib/api/api-error";
+import { toast } from "sonner";
 
 const forgotSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -29,13 +34,26 @@ export function ForgotPasswordForm() {
     control,
     handleSubmit,
     formState: { errors },
+    setError,
   } = useForm<ForgotValues>({
     resolver: zodResolver(forgotSchema),
     defaultValues: { email: "" },
   });
 
-  const onSubmit = (data: ForgotValues) => {
-    router.push(`/forgot-password/otp?email=${encodeURIComponent(data.email)}`);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const onSubmit = async (data: ForgotValues) => {
+    try {
+      setIsLoading(true);
+      await authApi.forgotPassword(data);
+      router.push(`/otp?email=${encodeURIComponent(data.email)}`);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const handledFieldError = applyFieldError(error, setError);
+        if (!handledFieldError) toast.error(error.message);
+      }
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -43,7 +61,7 @@ export function ForgotPasswordForm() {
       <CardHeader>
         <CardTitle>Reset password</CardTitle>
         <CardDescription>
-          Enter your email and we'll send you a verification code.
+          Enter your email and we&apos;ll send you a verification code.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -62,8 +80,8 @@ export function ForgotPasswordForm() {
             )}
           />
 
-          <Button type="submit" className="w-full">
-            Send OTP
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Sending..." : "Send OTP"}
           </Button>
         </form>
       </CardContent>

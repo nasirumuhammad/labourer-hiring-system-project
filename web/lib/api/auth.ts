@@ -7,6 +7,10 @@ export interface TokenPairResponse {
   refreshToken: string;
 }
 
+export interface VerifyOtpResponse {
+  resetToken: string;
+}
+
 export const authApi = {
   signin: (payload: SigninValues) =>
     authRequest<TokenPairResponse>("/signin", payload),
@@ -14,4 +18,12 @@ export const authApi = {
     authRequest<TokenPairResponse>("/signup", payload),
   signout: () => authRequest<string>("/signout"),
   me: () => authRequest("/me", undefined, "GET"),
+  forgotPassword: (payload: { email: string }) =>
+    authRequest<string>("/forgot-password", payload),
+  verifyOtp: (payload: { email: string; otp: string }) =>
+    authRequest<VerifyOtpResponse>("/verify-otp", payload),
+  resendOtp: (payload: { email: string }) =>
+    authRequest<string>("/resend-otp", payload),
+  resetPassword: (payload: { token: string; password: string }) =>
+    authRequest<string>("/reset-password", payload),
 };

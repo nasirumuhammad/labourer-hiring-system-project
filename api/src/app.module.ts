@@ -18,6 +18,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { BullModule } from '@nestjs/bullmq';
 import { bullConfig } from './common/config/bull.config';
 import { envConfig } from './common/config/env.config';
+import { RedisModule } from './common/redis/redis.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { envConfig } from './common/config/env.config';
     LoggerModule.forRoot(loggerConfig),
     EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync(dbConfig),
+    RedisModule,
     CommonModule,
     UserModule,
     RefreshTokenModule,
