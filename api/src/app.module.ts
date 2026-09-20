@@ -19,6 +19,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { bullConfig } from './common/config/bull.config';
 import { envConfig } from './common/config/env.config';
 import { RedisModule } from './common/redis/redis.module';
+import { JobModule } from './job/job.module';
+import { ApplicationModule } from './application/application.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { RedisModule } from './common/redis/redis.module';
     UserModule,
     RefreshTokenModule,
     AuthModule,
+    JobModule,
+    ApplicationModule,
     BullModule.forRootAsync(bullConfig),
   ],
   controllers: [AppController],

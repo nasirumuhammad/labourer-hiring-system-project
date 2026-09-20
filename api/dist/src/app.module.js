@@ -28,6 +28,8 @@ const bullmq_1 = require("@nestjs/bullmq");
 const bull_config_1 = require("./common/config/bull.config");
 const env_config_1 = require("./common/config/env.config");
 const redis_module_1 = require("./common/redis/redis.module");
+const job_module_1 = require("./job/job.module");
+const application_module_1 = require("./application/application.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -48,6 +50,8 @@ exports.AppModule = AppModule = __decorate([
             user_module_1.UserModule,
             refresh_token_module_1.RefreshTokenModule,
             auth_module_1.AuthModule,
+            job_module_1.JobModule,
+            application_module_1.ApplicationModule,
             bullmq_1.BullModule.forRootAsync(bull_config_1.bullConfig),
         ],
         controllers: [app_controller_1.AppController],

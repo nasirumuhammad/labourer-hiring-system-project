@@ -2,6 +2,8 @@ import { User } from '@/user/entities/user.entity';
 import { TypeOrmModuleAsyncOptions } from '@nestjs/typeorm';
 import { ConfigType } from '@nestjs/config';
 import { RefreshToken } from '@/refresh-token/entities/refresh-token.entity';
+import { Job } from '@/job/entities/job.entity';
+import { Application } from '@/application/entities/application.entity';
 import { envConfig } from './env.config';
 
 export const dbConfig: TypeOrmModuleAsyncOptions = {
@@ -17,7 +19,7 @@ export const dbConfig: TypeOrmModuleAsyncOptions = {
       username,
       password,
       database,
-      entities: [User, RefreshToken],
+      entities: [User, RefreshToken, Job, Application],
       synchronize: true,
     };
   },
