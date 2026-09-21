@@ -5,6 +5,7 @@ import { JobStatus, PaymentType } from '@labour-hiring/enums';
 import { Job } from './entities/job.entity';
 import { CreateJobDto } from './dto/create-job.dto';
 import { QueryJobsDto } from './dto/query-jobs.dto';
+import { QueryMyJobsDto } from './dto/query-my-job.dto';
 
 export interface FacetCount<T = string> {
   value: T;
@@ -22,6 +23,13 @@ export interface PaginatedJobs {
   page: number;
   limit: number;
   facets: JobFacets;
+}
+
+export interface PaginatedMyJobs {
+  data: Job[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 @Injectable()
@@ -42,9 +50,8 @@ export class JobService {
   }
 
   async count(): Promise<number> {
-  return this.jobRepository.count();
-}
-
+    return this.jobRepository.count();
+  }
 
   async findAll(query: QueryJobsDto): Promise<PaginatedJobs> {
     const qb = this.buildFilteredQuery(query);
@@ -69,6 +76,30 @@ export class JobService {
     }
 
     return job;
+  }
+
+  async findOwned(id: string, employerId: string): Promise<Job> {
+    const job = await this.jobRepository.findOneBy({ id });
+
+    if (!job || job.employerId !== employerId) {
+      throw new NotFoundException('Job not found');
+    }
+
+    return job;
+  }
+
+  async findMine(
+    employerId: string,
+    query: QueryMyJobsDto,
+  ): Promise<PaginatedMyJobs> {
+    const [data, total] = await this.jobRepository.findAndCount({
+      where: { employerId, ...(query.status ? { status: query.status } : {}) },
+      order: { createdAt: 'DESC' },
+      skip: query.skip,
+      take: query.limit,
+    });
+
+    return { data, total, page: query.page, limit: query.limit };
   }
 
   private buildFilteredQuery(query: QueryJobsDto) {

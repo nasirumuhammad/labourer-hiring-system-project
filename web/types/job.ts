@@ -46,6 +46,7 @@ export interface Application {
   jobId: string;
   job?: Job;
   applicantId: string;
+  applicant?: { id: string; email: string };
   status: ApplicationStatus;
   createdAt: string;
   updatedAt: string;
@@ -56,6 +57,25 @@ export interface PaginatedApplications {
   total: number;
   page: number;
   limit: number;
+}
+
+export interface PaginatedMyJobs {
+  data: Job[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CreateJobDto {
+  title: string;
+  companyName: string;
+  description: string;
+  location?: string;
+  paymentType: PaymentType;
+  minPay: string;
+  maxPay: string;
+  minExperienceYears?: number;
+  skills?: string[];
 }
 
 export interface JobQueryParams {

@@ -29,8 +29,8 @@ export function JobCard({ job }: { job: Job }) {
             {job.description}
           </p>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {job.skills.map((skill) => (
-              <Badge key={skill} variant="outline">
+            {job.skills.map((skill, index) => (
+              <Badge key={index} variant="outline">
                 {skill}
               </Badge>
             ))}

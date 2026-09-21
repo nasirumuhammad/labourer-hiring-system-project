@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -11,6 +12,8 @@ import {
 import { UserRole } from '@labour-hiring/enums';
 import { ApplicationService } from './application.service';
 import { ApplyJobDto } from './dto/apply-job.dto';
+import { QueryApplicationsDto } from './dto/query-applications.dto';
+import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
@@ -37,5 +40,27 @@ export class ApplicationController {
   @Get('applications/me')
   findMine(@CurrentUser() user: Payload, @Query() query: PaginationQueryDto) {
     return this.applicationService.findMine(user.sub, query);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.EMPLOYER)
+  @Get('jobs/:id/applications')
+  findForJob(
+    @Param('id', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: Payload,
+    @Query() query: QueryApplicationsDto,
+  ) {
+    return this.applicationService.findForJob(jobId, user.sub, query);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.EMPLOYER)
+  @Patch('applications/:id/status')
+  updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: Payload,
+    @Body() dto: UpdateApplicationStatusDto,
+  ) {
+    return this.applicationService.updateStatus(id, user.sub, dto.status);
   }
 }

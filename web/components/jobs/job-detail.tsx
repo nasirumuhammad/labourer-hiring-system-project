@@ -51,8 +51,8 @@ export function JobDetail({ jobId }: { jobId: string }) {
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm">{job.description}</p>
           <div className="flex flex-wrap gap-1.5">
-            {job.skills.map((skill) => (
-              <Badge key={skill} variant="outline">
+            {job.skills.map((skill, index) => (
+              <Badge key={index} variant="outline">
                 {skill}
               </Badge>
             ))}

@@ -1,9 +1,14 @@
 import type {
+  Application,
+  ApplicationStatus,
   ApplyJobDto,
+  CreateJobDto,
+  Job,
   JobQueryParams,
+  JobStatus,
   PaginatedApplications,
   PaginatedJobs,
-  Job,
+  PaginatedMyJobs,
 } from "@/types/job";
 import { apiClient } from "./api/api-client";
 
@@ -34,4 +39,23 @@ export const jobsApi = {
     apiClient.get<PaginatedApplications>(
       `/applications/me?page=${page}&limit=${limit}`,
     ),
+
+  create: (payload: CreateJobDto) => apiClient.post<Job>("/jobs", payload),
+
+  mine: (page = 1, limit = 10, status?: JobStatus) =>
+    apiClient.get<PaginatedMyJobs>(
+      `/jobs/mine?page=${page}&limit=${limit}${
+        status ? `&status=${status}` : ""
+      }`,
+    ),
+
+  applicantsForJob: (jobId: string, page = 1, limit = 10) =>
+    apiClient.get<PaginatedApplications>(
+      `/jobs/${jobId}/applications?page=${page}&limit=${limit}`,
+    ),
+
+  updateApplicationStatus: (applicationId: string, status: ApplicationStatus) =>
+    apiClient.update<Application>(`/applications/${applicationId}/status`, {
+      status,
+    }),
 };

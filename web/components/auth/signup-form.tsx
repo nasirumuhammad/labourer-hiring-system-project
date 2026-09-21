@@ -17,18 +17,37 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
 import { authApi } from "@/lib/api/auth";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { applyFieldError } from "@/lib/apply-field-error";
 import { ApiError } from "@/lib/api/api-error";
 import { toast } from "sonner";
 import { useFormSubmission } from "@/hooks/useform-submission";
+import { cn } from "cn";
 
 const signupSchema = z.object({
   email: z.string().email("Invalid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["labourer", "employer"]),
 });
 
 export type SignupValues = z.infer<typeof signupSchema>;
+
+const ROLE_OPTIONS: {
+  value: SignupValues["role"];
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "labourer",
+    label: "I'm looking for work",
+    description: "Browse jobs and apply",
+  },
+  {
+    value: "employer",
+    label: "I'm hiring",
+    description: "Post jobs and review applicants",
+  },
+];
 
 export function SignupForm() {
   const router = useRouter();
@@ -42,7 +61,7 @@ export function SignupForm() {
     setError,
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "", role: "labourer" },
   });
 
   const { isBusy, markRedirecting } = useFormSubmission();
@@ -68,6 +87,39 @@ export function SignupForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <Controller
+            name="role"
+            control={control}
+            render={({ field }) => (
+              <Field>
+                <FieldLabel>I want to...</FieldLabel>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROLE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => field.onChange(option.value)}
+                      aria-pressed={field.value === option.value}
+                      className={cn(
+                        "flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors",
+                        field.value === option.value
+                          ? "border-primary bg-primary/5"
+                          : "border-input hover:bg-muted/50",
+                      )}
+                    >
+                      <span className="text-sm font-medium">
+                        {option.label}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
+          />
+
           <Controller
             name="email"
             control={control}

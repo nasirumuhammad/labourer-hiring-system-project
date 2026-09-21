@@ -1,8 +1,15 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ApplicationStatus } from '@labour-hiring/enums';
 import { Application } from './entities/application.entity';
 import { ApplyJobDto } from './dto/apply-job.dto';
+import { QueryApplicationsDto } from './dto/query-applications.dto';
 import { JobService } from '@/job/job.service';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 
@@ -84,11 +91,71 @@ export class ApplicationService {
     };
   }
 
-  // Bank details are select:false so ordinary finds already omit them, but
-  // .create()/.save() still returns whatever was set on the in-memory
-  // entity — strip them explicitly before anything reaches a controller.
+  // An employer viewing who applied to one of their own jobs. Ownership is
+  // enforced by jobService.findOwned() before any application row is read,
+  // so a non-owner gets the same NotFoundException as a bad job id.
+  async findForJob(
+    jobId: string,
+    employerId: string,
+    query: QueryApplicationsDto,
+  ): Promise<PaginatedApplications> {
+    await this.jobService.findOwned(jobId, employerId);
+
+    const [data, total] = await this.applicationRepository.findAndCount({
+      where: {
+        jobId,
+        ...(query.status ? { status: query.status } : {}),
+      },
+      relations: { applicant: true },
+      order: { createdAt: 'DESC' },
+      skip: query.skip,
+      take: query.limit,
+    });
+
+    return {
+      data: data.map((application) => this.toSafeApplication(application)),
+      total,
+      page: query.page,
+      limit: query.limit,
+    };
+  }
+
+  // Accept/reject — the only decision an employer can make, and only once.
+  // Loading via the 'job' relation lets us check ownership without a
+  // second query, and NotFoundException (rather than Forbidden) avoids
+  // confirming to a non-owner that the application id exists at all.
+  async updateStatus(
+    applicationId: string,
+    employerId: string,
+    status: ApplicationStatus.ACCEPTED | ApplicationStatus.REJECTED,
+  ): Promise<SafeApplication> {
+    const application = await this.applicationRepository.findOne({
+      where: { id: applicationId },
+      relations: { job: true },
+    });
+
+    if (!application || application.job.employerId !== employerId) {
+      throw new NotFoundException('Application not found');
+    }
+
+    if (application.status !== ApplicationStatus.PENDING) {
+      throw new ConflictException(
+        `This application has already been ${application.status}`,
+      );
+    }
+
+    application.status = status;
+    const saved = await this.applicationRepository.save(application);
+
+    this.logger.log(
+      { applicationId, jobId: application.jobId, employerId, status },
+      'application status updated',
+    );
+
+    return this.toSafeApplication(saved);
+  }
+
   private toSafeApplication(application: Application): SafeApplication {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { bankName, bankAccountNumber, bvn, ...safe } = application;
     return safe;
   }

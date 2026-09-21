@@ -1,11 +1,17 @@
+"use client";
+
 import Link from "next/link";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, isLoading } = useCurrentUser();
+  const isEmployer = user?.role === "employer";
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b bg-background">
@@ -24,12 +30,35 @@ export default function DashboardLayout({
               <Link href="/dashboard" className="hover:text-foreground">
                 Home
               </Link>
-              <Link href="/jobs" className="hover:text-foreground">
-                Jobs
-              </Link>
-              <Link href="/applications" className="hover:text-foreground">
-                My Applications
-              </Link>
+              {!isLoading &&
+                (isEmployer ? (
+                  <>
+                    <Link
+                      href="/employer/jobs"
+                      className="hover:text-foreground"
+                    >
+                      My Jobs
+                    </Link>
+                    <Link
+                      href="/employer/jobs/new"
+                      className="hover:text-foreground"
+                    >
+                      Post a Job
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/jobs" className="hover:text-foreground">
+                      Jobs
+                    </Link>
+                    <Link
+                      href="/applications"
+                      className="hover:text-foreground"
+                    >
+                      My Applications
+                    </Link>
+                  </>
+                ))}
             </nav>
           </div>
           <SignOutButton />

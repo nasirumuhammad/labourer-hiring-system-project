@@ -17,6 +17,7 @@ import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Payload } from '@labour-hiring/types';
+import { QueryMyJobsDto } from './dto/query-my-job.dto';
 
 @Controller('jobs')
 export class JobController {
@@ -25,6 +26,13 @@ export class JobController {
   @Get()
   findAll(@Query() query: QueryJobsDto) {
     return this.jobService.findAll(query);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.EMPLOYER)
+  @Get('mine')
+  findMine(@CurrentUser() user: Payload, @Query() query: QueryMyJobsDto) {
+    return this.jobService.findMine(user.sub, query);
   }
 
   @Get(':id')

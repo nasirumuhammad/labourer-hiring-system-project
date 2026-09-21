@@ -41,19 +41,20 @@ export class AuthService {
     private readonly otpService: OtpService,
   ) {}
 
-  async signup(dto: SignUpDto): Promise<TokenPair> {
-    const user = await this.userService.create(
-      dto.email,
-      dto.password,
-      UserRole.LABOURER,
-    );
-    const tokens = await this.issueTokenPair(user);
-    this.logger.log(
-      { email: maskEmail(user.email) },
-      'labourer signup succeeded tokens issued',
-    );
-    return tokens;
-  }
+  
+async signup(dto: SignUpDto): Promise<TokenPair> {
+  const user = await this.userService.create(
+    dto.email,
+    dto.password,
+    dto.role,
+  );
+  const tokens = await this.issueTokenPair(user);
+  this.logger.log(
+    { email: maskEmail(user.email), role: user.role },
+    'self-serve signup succeeded tokens issued',
+  );
+  return tokens;
+}
 
   async signupAdmin(dto: SignUpDto, createdBy: string): Promise<User> {
     const user = await this.userService.create(
