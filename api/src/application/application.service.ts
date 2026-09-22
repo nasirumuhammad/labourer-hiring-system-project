@@ -12,6 +12,21 @@ import { ApplyJobDto } from './dto/apply-job.dto';
 import { QueryApplicationsDto } from './dto/query-applications.dto';
 import { JobService } from '@/job/job.service';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
+import { MessageEvent } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  Observable,
+  filter,
+  fromEvent,
+  interval,
+  map,
+  merge,
+  timer,
+} from 'rxjs';
+import {
+  ApplicationEvents,
+  ApplicationStatusUpdatedEvent,
+} from './constants/application-events.constant';
 
 export type SafeApplication = Omit<
   Application,
@@ -33,6 +48,7 @@ export class ApplicationService {
     @InjectRepository(Application)
     private readonly applicationRepository: Repository<Application>,
     private readonly jobService: JobService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async apply(
@@ -151,8 +167,45 @@ export class ApplicationService {
       { applicationId, jobId: application.jobId, employerId, status },
       'application status updated',
     );
-
+    this.eventEmitter.emit(
+      ApplicationEvents.STATUS_UPDATED,
+      new ApplicationStatusUpdatedEvent(
+        saved.id,
+        saved.applicantId,
+        saved.jobId,
+        saved.status,
+      ),
+    );
     return this.toSafeApplication(saved);
+  }
+
+  // Live status updates for the applicant's own "My Applications" view.
+  // Filtered to this applicant's own events only — every connected client
+  // shares the same underlying emitter, so without this filter one
+  // labourer would see every other labourer's status changes too.
+  //
+  // A periodic ping keeps the connection alive through proxies/load
+  // balancers that would otherwise time out an idle stream.
+  streamStatusUpdates(applicantId: string): Observable<MessageEvent> {
+    const statusUpdates$ = fromEvent<ApplicationStatusUpdatedEvent>(
+      this.eventEmitter,
+      ApplicationEvents.STATUS_UPDATED,
+    ).pipe(
+      filter((event) => event.applicantId === applicantId),
+      map((event): MessageEvent => ({
+        type: 'application-status-updated',
+        data: event,
+      })),
+    );
+
+    const heartbeat$ = timer(0, 20_000).pipe(
+      map((): MessageEvent => ({
+        type: 'ping',
+        data: {},
+      })),
+    );
+
+    return merge(statusUpdates$, heartbeat$);
   }
 
   private toSafeApplication(application: Application): SafeApplication {

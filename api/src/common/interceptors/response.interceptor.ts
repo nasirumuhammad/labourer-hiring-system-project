@@ -4,8 +4,10 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { SKIP_RESPONSE_TRANSFORM } from '../decorators/skip-response-transformation.decorator';
 
 export interface ApiResponse<T> {
   message?: string;
@@ -23,10 +25,17 @@ function isMessageOnlyResult(result: unknown): result is { message: string } {
 
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<ApiResponse<unknown>> {
+  constructor(private readonly reflector: Reflector) {}
+
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    const skip = this.reflector.getAllAndOverride<boolean>(
+      SKIP_RESPONSE_TRANSFORM,
+      [context.getHandler(), context.getClass()],
+    );
+    if (skip) {
+      return next.handle();
+    }
+
     return next.handle().pipe(
       map((result: unknown) => {
         if (typeof result === 'string') {

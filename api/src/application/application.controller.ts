@@ -2,11 +2,13 @@ import {
   Body,
   Controller,
   Get,
+  MessageEvent,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
 import { UserRole } from '@labour-hiring/enums';
@@ -20,6 +22,8 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Payload } from '@labour-hiring/types';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
+import { Observable } from 'rxjs';
+import { SkipResponseTransform } from '@/common/decorators/skip-response-transformation.decorator';
 
 @Controller()
 export class ApplicationController {
@@ -40,6 +44,14 @@ export class ApplicationController {
   @Get('applications/me')
   findMine(@CurrentUser() user: Payload, @Query() query: PaginationQueryDto) {
     return this.applicationService.findMine(user.sub, query);
+  }
+
+  @SkipResponseTransform()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.LABOURER)
+  @Sse('applications/stream')
+  stream(@CurrentUser() user: Payload): Observable<MessageEvent> {
+    return this.applicationService.streamStatusUpdates(user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

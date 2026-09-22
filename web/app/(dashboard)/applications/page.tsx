@@ -6,6 +6,11 @@ import { Card } from "@/components/ui/card";
 import { ApiError } from "@/lib/api/api-error";
 import type { Application } from "@/types/job";
 import { jobsApi } from "@/lib/job";
+import { useCallback } from "react";
+import {
+  useApplicationStatusStream,
+  type ApplicationStatusUpdate,
+} from "@/hooks/use-application-status-stream";
 
 const STATUS_VARIANT: Record<
   Application["status"],
@@ -41,6 +46,17 @@ export default function ApplicationsPage() {
     fetchApplications();
   }, []);
 
+  const handleStatusUpdate = useCallback((update: ApplicationStatusUpdate) => {
+    setApplications((current) =>
+      current.map((application) =>
+        application.id === update.applicationId
+          ? { ...application, status: update.status }
+          : application,
+      ),
+    );
+  }, []);
+
+  useApplicationStatusStream(handleStatusUpdate);
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4">
       <h1 className="text-2xl font-bold">My Applications</h1>

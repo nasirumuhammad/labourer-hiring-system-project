@@ -70,7 +70,7 @@ export function JobApplicantsList({
         applicationId,
         status,
       );
-      const updated = response;
+      const updated = response?.data;
       if (updated) {
         setApplications((current) =>
           current.map((application) =>
