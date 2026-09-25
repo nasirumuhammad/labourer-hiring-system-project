@@ -22,6 +22,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { JobModule } from './job/job.module';
 import { ApplicationModule } from './application/application.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { UserProfileModule } from './user-profile/user-profile.module';
     ApplicationModule,
     BullModule.forRootAsync(bullConfig),
     UserProfileModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

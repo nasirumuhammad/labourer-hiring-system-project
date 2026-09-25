@@ -19,8 +19,9 @@ export async function refreshTokens(
     const response = await fetch(`${BASE_URL}/auth/refresh`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${refreshToken}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ refreshToken }),
       cache: "no-store",
     });
 

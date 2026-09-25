@@ -11,6 +11,7 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = useCurrentUser();
   const isEmployer = user?.role === "employer";
+  const isAdmin = user?.role === "admin";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -30,35 +31,23 @@ export default function DashboardLayout({
               <Link href="/dashboard" className="hover:text-foreground">
                 Home
               </Link>
-              {!isLoading &&
-                (isEmployer ? (
+              {!isLoading && (
+                isAdmin ? (
+                  <Link href="/admin" className="hover:text-foreground">
+                    Admin Panel
+                  </Link>
+                ) : isEmployer ? (
                   <>
-                    <Link
-                      href="/employer/jobs"
-                      className="hover:text-foreground"
-                    >
-                      My Jobs
-                    </Link>
-                    <Link
-                      href="/employer/jobs/new"
-                      className="hover:text-foreground"
-                    >
-                      Post a Job
-                    </Link>
+                    <Link href="/employer/jobs" className="hover:text-foreground">My Jobs</Link>
+                    <Link href="/employer/jobs/new" className="hover:text-foreground">Post a Job</Link>
                   </>
                 ) : (
                   <>
-                    <Link href="/jobs" className="hover:text-foreground">
-                      Jobs
-                    </Link>
-                    <Link
-                      href="/applications"
-                      className="hover:text-foreground"
-                    >
-                      My Applications
-                    </Link>
+                    <Link href="/jobs" className="hover:text-foreground">Jobs</Link>
+                    <Link href="/applications" className="hover:text-foreground">My Applications</Link>
                   </>
-                ))}
+                )
+              )}
             </nav>
           </div>
           <SignOutButton />
