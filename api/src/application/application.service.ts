@@ -14,24 +14,13 @@ import { JobService } from '@/job/job.service';
 import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 import { MessageEvent } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import {
-  Observable,
-  filter,
-  fromEvent,
-  interval,
-  map,
-  merge,
-  timer,
-} from 'rxjs';
+import { Observable, filter, fromEvent, map, merge, timer } from 'rxjs';
 import {
   ApplicationEvents,
   ApplicationStatusUpdatedEvent,
 } from './constants/application-events.constant';
 
-export type SafeApplication = Omit<
-  Application,
-  'bankName' | 'bankAccountNumber' | 'bvn'
->;
+export type SafeApplication = Application;
 
 export interface PaginatedApplications {
   data: SafeApplication[];
@@ -73,9 +62,7 @@ export class ApplicationService {
     const application = this.applicationRepository.create({
       jobId: job.id,
       applicantId,
-      bankName: dto.bankName,
-      bankAccountNumber: dto.bankAccountNumber,
-      bvn: dto.bvn,
+      proposal: dto.proposal,
     });
     const saved = await this.applicationRepository.save(application);
 
@@ -84,7 +71,7 @@ export class ApplicationService {
       'job application submitted',
     );
 
-    return this.toSafeApplication(saved);
+    return saved;
   }
 
   async findMine(
@@ -100,7 +87,7 @@ export class ApplicationService {
     });
 
     return {
-      data: data.map((application) => this.toSafeApplication(application)),
+      data,
       total,
       page: query.page,
       limit: query.limit,
@@ -129,7 +116,7 @@ export class ApplicationService {
     });
 
     return {
-      data: data.map((application) => this.toSafeApplication(application)),
+      data,
       total,
       page: query.page,
       limit: query.limit,
@@ -176,7 +163,7 @@ export class ApplicationService {
         saved.status,
       ),
     );
-    return this.toSafeApplication(saved);
+    return saved;
   }
 
   // Live status updates for the applicant's own "My Applications" view.
@@ -206,10 +193,5 @@ export class ApplicationService {
     );
 
     return merge(statusUpdates$, heartbeat$);
-  }
-
-  private toSafeApplication(application: Application): SafeApplication {
-    const { bankName, bankAccountNumber, bvn, ...safe } = application;
-    return safe;
   }
 }

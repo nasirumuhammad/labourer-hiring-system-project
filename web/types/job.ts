@@ -47,6 +47,7 @@ export interface Application {
   job?: Job;
   applicantId: string;
   applicant?: { id: string; email: string };
+  proposal: string;
   status: ApplicationStatus;
   createdAt: string;
   updatedAt: string;
@@ -88,7 +89,5 @@ export interface JobQueryParams {
 }
 
 export interface ApplyJobDto {
-  bankName: string;
-  bankAccountNumber: string;
-  bvn: string;
+  proposal: string;
 }

@@ -13,7 +13,6 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
-import { Payload } from './types/payload.type';
 import { SignUpDto } from './dto/signup.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
@@ -21,6 +20,7 @@ import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { UserRole } from '@labour-hiring/enums';
 import { AuthMapper } from './mappers/auth.mapper';
+import { Payload } from '@labour-hiring/types';
 
 @Controller('auth')
 export class AuthController {

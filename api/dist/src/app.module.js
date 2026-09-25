@@ -30,6 +30,7 @@ const env_config_1 = require("./common/config/env.config");
 const redis_module_1 = require("./common/redis/redis.module");
 const job_module_1 = require("./job/job.module");
 const application_module_1 = require("./application/application.module");
+const user_profile_module_1 = require("./user-profile/user-profile.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -53,6 +54,7 @@ exports.AppModule = AppModule = __decorate([
             job_module_1.JobModule,
             application_module_1.ApplicationModule,
             bullmq_1.BullModule.forRootAsync(bull_config_1.bullConfig),
+            user_profile_module_1.UserProfileModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

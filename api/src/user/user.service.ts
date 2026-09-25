@@ -1,10 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  Logger,
-  OnModuleInit,
-} from '@nestjs/common';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from '@labour-hiring/enums';
@@ -29,7 +23,10 @@ export class UserService {
   }
 
   async findById(id: string): Promise<User | null> {
-    return this.userRepository.findOneBy({ id });
+    return this.userRepository.findOne({
+      where: { id },
+      relations: { profile: true },
+    });
   }
 
   async findByEmailWithPassword(email: string): Promise<User | null> {
@@ -41,7 +38,10 @@ export class UserService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOneBy({ email });
+    return this.userRepository.findOne({
+      where: { email },
+      relations: { profile: true },
+    });
   }
 
   async create(email: string, password: string, role: UserRole): Promise<User> {

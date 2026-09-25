@@ -12,7 +12,7 @@ import { SignInDto } from './dto/signin.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { HashingService } from './common/services/hashing.service';
 import { TokenService } from './token.service';
-import { Payload, TokenPair } from './types/payload.type';
+import { TokenPair } from './types/payload.type';
 import { maskEmail } from './common/utils/mask.util';
 import {
   ForgotPasswordResetTokenEventPayload,
@@ -23,6 +23,7 @@ import { UserRole } from '@labour-hiring/enums';
 import { RefreshTokenService } from '@/refresh-token/refresh-token.service';
 import { SignUpDto } from './dto/signup.dto';
 import { OtpService } from '@/otp/otp.service';
+import { Payload } from '@labour-hiring/types';
 
 @Injectable()
 export class AuthService {
@@ -41,20 +42,19 @@ export class AuthService {
     private readonly otpService: OtpService,
   ) {}
 
-  
-async signup(dto: SignUpDto): Promise<TokenPair> {
-  const user = await this.userService.create(
-    dto.email,
-    dto.password,
-    dto.role,
-  );
-  const tokens = await this.issueTokenPair(user);
-  this.logger.log(
-    { email: maskEmail(user.email), role: user.role },
-    'self-serve signup succeeded tokens issued',
-  );
-  return tokens;
-}
+  async signup(dto: SignUpDto): Promise<TokenPair> {
+    const user = await this.userService.create(
+      dto.email,
+      dto.password,
+      dto.role,
+    );
+    const tokens = await this.issueTokenPair(user);
+    this.logger.log(
+      { email: maskEmail(user.email), role: user.role },
+      'self-serve signup succeeded tokens issued',
+    );
+    return tokens;
+  }
 
   async signupAdmin(dto: SignUpDto, createdBy: string): Promise<User> {
     const user = await this.userService.create(

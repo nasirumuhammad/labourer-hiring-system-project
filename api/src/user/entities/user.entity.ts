@@ -3,10 +3,12 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  OneToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { UserRole } from '@labour-hiring/enums';
+import { UserProfile } from '@/user-profile/entities/user-profile.entity';
 
 @Entity()
 export class User {
@@ -33,4 +35,7 @@ export class User {
 
   @DeleteDateColumn()
   deletedAt?: Date;
+
+  @OneToOne(() => UserProfile, (profile) => profile.user)
+  profile!: UserProfile;
 }

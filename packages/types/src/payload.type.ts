@@ -5,4 +5,5 @@ export type Payload = {
   sub: string;
   tokenVersion: number;
   role: UserRole;
+  hasProfile: boolean;
 };

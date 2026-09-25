@@ -21,6 +21,7 @@ import { envConfig } from './common/config/env.config';
 import { RedisModule } from './common/redis/redis.module';
 import { JobModule } from './job/job.module';
 import { ApplicationModule } from './application/application.module';
+import { UserProfileModule } from './user-profile/user-profile.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ApplicationModule } from './application/application.module';
     JobModule,
     ApplicationModule,
     BullModule.forRootAsync(bullConfig),
+    UserProfileModule,
   ],
   controllers: [AppController],
   providers: [

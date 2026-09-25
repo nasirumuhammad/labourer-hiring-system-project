@@ -4,7 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { jwtConfig } from '@/common/config/env.config';
 import { User } from '@/user/entities/user.entity';
-import { Payload, ResetPasswordPayload, TokenPair } from './types/payload.type';
+import { ResetPasswordPayload, TokenPair } from './types/payload.type';
+import { Payload } from '@labour-hiring/types';
 
 @Injectable()
 export class TokenService {
@@ -20,6 +21,7 @@ export class TokenService {
       sub: user.id,
       tokenVersion: user.tokenVersion,
       role: user.role,
+      hasProfile: !!user.profile,
     };
   }
 

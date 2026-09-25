@@ -1,27 +1,36 @@
 "use client";
 
-import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { applyFieldError } from "@/lib/apply-field-error";
 import { ApiError } from "@/lib/api/api-error";
 import { jobsApi } from "@/lib/job";
+import { RichTextEditor } from "../ui/rich-text-editor";
+
+const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").trim();
 
 const applySchema = z.object({
-  bankName: z.string().min(2, "Bank name is required"),
-  bankAccountNumber: z.string().length(10, "Account number must be 10 digits"),
-  bvn: z.string().length(11, "BVN must be 11 digits"),
+  proposal: z
+    .string()
+    .trim()
+    .refine((html) => stripHtml(html).length >= 20, {
+      message: "Proposal must be at least 20 characters",
+    }),
 });
 
 type ApplyValues = z.infer<typeof applySchema>;
 
 export function ApplyJobForm({ jobId }: { jobId: string }) {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const {
     control,
     handleSubmit,
@@ -29,72 +38,51 @@ export function ApplyJobForm({ jobId }: { jobId: string }) {
     setError,
   } = useForm<ApplyValues>({
     resolver: zodResolver(applySchema),
-    defaultValues: { bankName: "", bankAccountNumber: "", bvn: "" },
+    defaultValues: {
+      proposal: "",
+    },
   });
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const onSubmit = async (data: ApplyValues) => {
     try {
       setIsLoading(true);
       setSubmitError(null);
+
       await jobsApi.apply(jobId, data);
+
       router.push("/applications?applied=success");
     } catch (error) {
       if (error instanceof ApiError) {
         const handledFieldError = applyFieldError(error, setError);
-        if (!handledFieldError) setSubmitError(error.message);
+
+        if (!handledFieldError) {
+          setSubmitError(error.message);
+        }
       }
+
       setIsLoading(false);
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        We need your payout details to process payment if you&apos;re hired.
-      </p>
+      <Field data-invalid={!!errors.proposal}>
+        <FieldLabel htmlFor="proposal">Your proposal</FieldLabel>
+        <Controller
+          name="proposal"
+          control={control}
+          render={({ field }) => (
+            <RichTextEditor
+              value={field.value}
+              onChange={field.onChange}
+              disabled={isLoading}
+              placeholder="Write your proposal..."
+            />
+          )}
+        />
 
-      <Controller
-        name="bankName"
-        control={control}
-        render={({ field }) => (
-          <Field data-invalid={!!errors.bankName}>
-            <FieldLabel>Bank name</FieldLabel>
-            <Input placeholder="e.g. GTBank" {...field} />
-            {errors.bankName && (
-              <FieldError>{errors.bankName.message}</FieldError>
-            )}
-          </Field>
-        )}
-      />
-
-      <Controller
-        name="bankAccountNumber"
-        control={control}
-        render={({ field }) => (
-          <Field data-invalid={!!errors.bankAccountNumber}>
-            <FieldLabel>Account number</FieldLabel>
-            <Input placeholder="10-digit account number" {...field} />
-            {errors.bankAccountNumber && (
-              <FieldError>{errors.bankAccountNumber.message}</FieldError>
-            )}
-          </Field>
-        )}
-      />
-
-      <Controller
-        name="bvn"
-        control={control}
-        render={({ field }) => (
-          <Field data-invalid={!!errors.bvn}>
-            <FieldLabel>BVN</FieldLabel>
-            <Input placeholder="11-digit BVN" {...field} />
-            {errors.bvn && <FieldError>{errors.bvn.message}</FieldError>}
-          </Field>
-        )}
-      />
+        {errors.proposal && <FieldError>{errors.proposal.message}</FieldError>}
+      </Field>
 
       {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 

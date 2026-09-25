@@ -41,18 +41,8 @@ export class Application {
   })
   status!: ApplicationStatus;
 
-  // Bank details are sensitive (payout information + BVN) — excluded from
-  // default selects, same as User.password. Fetch explicitly via
-  // addSelect() only where actually needed (e.g. an employer initiating
-  // payout), and never pass these through the logger.
-  @Column({ type: 'varchar', select: false })
-  bankName!: string;
-
-  @Column({ type: 'varchar', select: false })
-  bankAccountNumber!: string;
-
-  @Column({ type: 'varchar', select: false })
-  bvn!: string;
+  @Column({ type: 'varchar' })
+  proposal!: string;
 
   @CreateDateColumn()
   createdAt!: Date;

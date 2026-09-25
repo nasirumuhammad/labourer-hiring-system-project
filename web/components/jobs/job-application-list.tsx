@@ -116,41 +116,48 @@ export function JobApplicantsList({
       )}
 
       {applications.map((application) => (
-        <Card
-          key={application.id}
-          className="flex-row items-center justify-between p-4"
-        >
-          <div>
-            <p className="font-medium">
-              {application.applicant?.email ?? "Applicant"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Applied {new Date(application.createdAt).toLocaleDateString()}
-            </p>
+        <Card key={application.id} className="flex flex-col gap-4 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">
+                {application.applicant?.email ?? "Applicant"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Applied {new Date(application.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={STATUS_VARIANT[application.status]}>
+                {application.status}
+              </Badge>
+              {application.status === "pending" && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={decidingId === application.id}
+                    onClick={() => decide(application.id, "rejected")}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={decidingId === application.id}
+                    onClick={() => decide(application.id, "accepted")}
+                  >
+                    Accept
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={STATUS_VARIANT[application.status]}>
-              {application.status}
-            </Badge>
-            {application.status === "pending" && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={decidingId === application.id}
-                  onClick={() => decide(application.id, "rejected")}
-                >
-                  Reject
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={decidingId === application.id}
-                  onClick={() => decide(application.id, "accepted")}
-                >
-                  Accept
-                </Button>
-              </>
-            )}
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Proposal</p>
+            <div
+              className="prose prose-sm max-w-none text-muted-foreground"
+              dangerouslySetInnerHTML={{ __html: application.proposal }}
+            />
           </div>
         </Card>
       ))}

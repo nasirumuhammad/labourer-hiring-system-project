@@ -1,11 +1,4 @@
-import { UserRole } from '@labour-hiring/enums';
-
-export interface Payload {
-  jti: string;
-  sub: string;
-  tokenVersion: number;
-  role: UserRole;
-}
+import { Payload } from '@labour-hiring/types';
 
 export interface ResetPasswordPayload {
   sub: string;

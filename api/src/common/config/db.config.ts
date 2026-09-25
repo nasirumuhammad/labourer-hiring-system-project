@@ -5,6 +5,7 @@ import { RefreshToken } from '@/refresh-token/entities/refresh-token.entity';
 import { Job } from '@/job/entities/job.entity';
 import { Application } from '@/application/entities/application.entity';
 import { envConfig } from './env.config';
+import { UserProfile } from '@/user-profile/entities/user-profile.entity';
 
 export const dbConfig: TypeOrmModuleAsyncOptions = {
   inject: [envConfig.KEY],
@@ -19,7 +20,7 @@ export const dbConfig: TypeOrmModuleAsyncOptions = {
       username,
       password,
       database,
-      entities: [User, RefreshToken, Job, Application],
+      entities: [User, RefreshToken, Job, Application, UserProfile],
       synchronize: true,
     };
   },
