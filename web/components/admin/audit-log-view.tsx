@@ -1,0 +1,42 @@
+"use client";
+import { AuditLog } from "@/types/admin";
+
+export default function AuditLogsView({ data }: { data: AuditLog[] }) {
+  if (!data) return <p>Loading...</p>;
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold">Audit Logs</h1>
+        <p className="text-sm text-muted-foreground">
+          Administrative actions recorded by the platform.
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-xl border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="p-3 text-left">Action</th>
+              <th className="p-3 text-left">Entity</th>
+              <th className="p-3 text-left">Entity ID</th>
+              <th className="p-3 text-left">Admin ID</th>
+              <th className="p-3 text-left">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((log) => (
+              <tr key={log.id} className="border-t">
+                <td className="p-3">{log.action}</td>
+                <td className="p-3">{log.entityType}</td>
+                <td className="p-3">{log.entityId ?? "—"}</td>
+                <td className="p-3">{log.adminId}</td>
+                <td className="p-3">
+                  {new Date(log.createdAt).toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

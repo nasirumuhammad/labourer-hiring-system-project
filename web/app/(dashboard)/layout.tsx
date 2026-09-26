@@ -28,26 +28,40 @@ export default function DashboardLayout({
               JobLink
             </Link>
             <nav className="flex items-center gap-6 text-sm font-medium text-muted-foreground">
-              <Link href="/dashboard" className="hover:text-foreground">
-                Home
-              </Link>
-              {!isLoading && (
-                isAdmin ? (
-                  <Link href="/admin" className="hover:text-foreground">
-                    Admin Panel
-                  </Link>
+              {!isLoading &&
+                (isAdmin ? (
+                  <></>
                 ) : isEmployer ? (
                   <>
-                    <Link href="/employer/jobs" className="hover:text-foreground">My Jobs</Link>
-                    <Link href="/employer/jobs/new" className="hover:text-foreground">Post a Job</Link>
+                    <Link href="/dashboard" className="hover:text-foreground">
+                      Home
+                    </Link>
+                    <Link
+                      href="/employer/jobs"
+                      className="hover:text-foreground"
+                    >
+                      My Jobs
+                    </Link>
+                    <Link
+                      href="/employer/jobs/new"
+                      className="hover:text-foreground"
+                    >
+                      Post a Job
+                    </Link>
                   </>
                 ) : (
                   <>
-                    <Link href="/jobs" className="hover:text-foreground">Jobs</Link>
-                    <Link href="/applications" className="hover:text-foreground">My Applications</Link>
+                    <Link href="/jobs" className="hover:text-foreground">
+                      Jobs
+                    </Link>
+                    <Link
+                      href="/applications"
+                      className="hover:text-foreground"
+                    >
+                      My Applications
+                    </Link>
                   </>
-                )
-              )}
+                ))}
             </nav>
           </div>
           <SignOutButton />
