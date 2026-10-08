@@ -32,6 +32,9 @@ const job_module_1 = require("./job/job.module");
 const application_module_1 = require("./application/application.module");
 const user_profile_module_1 = require("./user-profile/user-profile.module");
 const admin_module_1 = require("./admin/admin.module");
+const dashboard_module_1 = require("./dashboard/dashboard.module");
+const saved_job_module_1 = require("./saved-job/saved-job.module");
+const recommendation_module_1 = require("./recommendation/recommendation.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -57,6 +60,9 @@ exports.AppModule = AppModule = __decorate([
             bullmq_1.BullModule.forRootAsync(bull_config_1.bullConfig),
             user_profile_module_1.UserProfileModule,
             admin_module_1.AdminModule,
+            dashboard_module_1.DashboardModule,
+            saved_job_module_1.SavedJobModule,
+            recommendation_module_1.RecommendationModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

@@ -1,0 +1,26 @@
+# Dependencies (Matches node_modules at the root, in web/, api/, and packages/)
+node_modules
+.pnpm-store
+
+# Next.js build output
+web/.next
+
+# NestJS / Build outputs
+api/dist
+dist
+*.tsbuildinfo
+
+# Environment files (Keeps secrets out of the built images)
+.env
+.env.*
+*.env
+
+# Git
+.git
+.gitignore
+
+# Logs
+*.log
+
+# OS files
+.DS_Store

@@ -1,0 +1,1608 @@
+diff --git a/api/src/application/application.controller.ts b/api/src/application/application.controller.ts
+index de7abf6..31604f4 100644
+--- a/api/src/application/application.controller.ts
++++ b/api/src/application/application.controller.ts
+@@ -13,7 +13,6 @@ import {
+ } from '@nestjs/common';
+ import { UserRole } from '@labour-hiring/enums';
+ import { ApplicationService } from './application.service';
+-import { ApplyJobDto } from './dto/apply-job.dto';
+ import { QueryApplicationsDto } from './dto/query-applications.dto';
+ import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
+ import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+@@ -35,9 +34,8 @@ export class ApplicationController {
+   apply(
+     @Param('id', ParseUUIDPipe) jobId: string,
+     @CurrentUser() user: Payload,
+-    @Body() dto: ApplyJobDto,
+   ) {
+-    return this.applicationService.apply(jobId, user.sub, dto);
++    return this.applicationService.apply(jobId, user.sub);
+   }
+ 
+   @UseGuards(JwtAuthGuard)
+diff --git a/api/src/application/application.service.ts b/api/src/application/application.service.ts
+index 7f9c999..9115c18 100644
+--- a/api/src/application/application.service.ts
++++ b/api/src/application/application.service.ts
+@@ -8,7 +8,6 @@ import { InjectRepository } from '@nestjs/typeorm';
+ import { Repository } from 'typeorm';
+ import { ApplicationStatus } from '@labour-hiring/enums';
+ import { Application } from './entities/application.entity';
+-import { ApplyJobDto } from './dto/apply-job.dto';
+ import { QueryApplicationsDto } from './dto/query-applications.dto';
+ import { JobService } from '@/job/job.service';
+ import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
+@@ -28,10 +27,9 @@ import {
+   ApplicationStatusUpdatedEvent,
+ } from './constants/application-events.constant';
+ 
+-export type SafeApplication = Omit<
+-  Application,
+-  'bankName' | 'bankAccountNumber' | 'bvn'
+->;
++// Bank/identity details now live on the User (collected at signup) and are
++// select:false there, so an Application is safe to return as-is.
++export type SafeApplication = Application;
+ 
+ export interface PaginatedApplications {
+   data: SafeApplication[];
+@@ -54,7 +52,6 @@ export class ApplicationService {
+   async apply(
+     jobId: string,
+     applicantId: string,
+-    dto: ApplyJobDto,
+   ): Promise<SafeApplication> {
+     const job = await this.jobService.findOne(jobId);
+ 
+@@ -73,9 +70,6 @@ export class ApplicationService {
+     const application = this.applicationRepository.create({
+       jobId: job.id,
+       applicantId,
+-      bankName: dto.bankName,
+-      bankAccountNumber: dto.bankAccountNumber,
+-      bvn: dto.bvn,
+     });
+     const saved = await this.applicationRepository.save(application);
+ 
+@@ -209,7 +203,6 @@ export class ApplicationService {
+   }
+ 
+   private toSafeApplication(application: Application): SafeApplication {
+-    const { bankName, bankAccountNumber, bvn, ...safe } = application;
+-    return safe;
++    return application;
+   }
+ }
+diff --git a/api/src/application/dto/apply-job.dto.ts b/api/src/application/dto/apply-job.dto.ts
+deleted file mode 100644
+index 542facd..0000000
+--- a/api/src/application/dto/apply-job.dto.ts
++++ /dev/null
+@@ -1,15 +0,0 @@
+-import { IsString, Length } from 'class-validator';
+-
+-export class ApplyJobDto {
+-  @IsString()
+-  @Length(2, 100)
+-  bankName!: string;
+-
+-  @IsString()
+-  @Length(10, 10)
+-  bankAccountNumber!: string;
+-
+-  @IsString()
+-  @Length(11, 11)
+-  bvn!: string;
+-}
+diff --git a/api/src/application/entities/application.entity.ts b/api/src/application/entities/application.entity.ts
+index 893eead..2ec3f4a 100644
+--- a/api/src/application/entities/application.entity.ts
++++ b/api/src/application/entities/application.entity.ts
+@@ -41,19 +41,6 @@ export class Application {
+   })
+   status!: ApplicationStatus;
+ 
+-  // Bank details are sensitive (payout information + BVN) — excluded from
+-  // default selects, same as User.password. Fetch explicitly via
+-  // addSelect() only where actually needed (e.g. an employer initiating
+-  // payout), and never pass these through the logger.
+-  @Column({ type: 'varchar', select: false })
+-  bankName!: string;
+-
+-  @Column({ type: 'varchar', select: false })
+-  bankAccountNumber!: string;
+-
+-  @Column({ type: 'varchar', select: false })
+-  bvn!: string;
+-
+   @CreateDateColumn()
+   createdAt!: Date;
+ 
+diff --git a/api/src/auth/auth.controller.ts b/api/src/auth/auth.controller.ts
+index d8f7bc4..4d0da14 100644
+--- a/api/src/auth/auth.controller.ts
++++ b/api/src/auth/auth.controller.ts
+@@ -15,6 +15,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
+ import { CurrentUser } from './decorators/current-user.decorator';
+ import { Payload } from './types/payload.type';
+ import { SignUpDto } from './dto/signup.dto';
++import { AdminSignUpDto } from './dto/admin-signup.dto';
+ import { VerifyOtpDto } from './dto/verify-otp.dto';
+ import { ResendOtpDto } from './dto/resend-otp.dto';
+ import { RolesGuard } from '@/common/guards/roles.guard';
+@@ -40,7 +41,7 @@ export class AuthController {
+   @HttpCode(HttpStatus.CREATED)
+   @UseGuards(JwtAuthGuard, RolesGuard)
+   @Roles(UserRole.ADMIN)
+-  async signupAdmin(@Body() dto: SignUpDto, @CurrentUser() actor: Payload) {
++  async signupAdmin(@Body() dto: AdminSignUpDto, @CurrentUser() actor: Payload) {
+     return this.authMapper.toPublicUserResponse(
+       await this.authService.signupAdmin(dto, actor.sub),
+     );
+diff --git a/api/src/auth/auth.service.ts b/api/src/auth/auth.service.ts
+index 53fb64a..cbd07a9 100644
+--- a/api/src/auth/auth.service.ts
++++ b/api/src/auth/auth.service.ts
+@@ -22,6 +22,7 @@ import { RefreshToken } from '@/refresh-token/entities/refresh-token.entity';
+ import { UserRole } from '@labour-hiring/enums';
+ import { RefreshTokenService } from '@/refresh-token/refresh-token.service';
+ import { SignUpDto } from './dto/signup.dto';
++import { AdminSignUpDto } from './dto/admin-signup.dto';
+ import { OtpService } from '@/otp/otp.service';
+ 
+ @Injectable()
+@@ -42,21 +43,28 @@ export class AuthService {
+   ) {}
+ 
+   
+-async signup(dto: SignUpDto): Promise<TokenPair> {
+-  const user = await this.userService.create(
+-    dto.email,
+-    dto.password,
+-    dto.role,
+-  );
+-  const tokens = await this.issueTokenPair(user);
+-  this.logger.log(
+-    { email: maskEmail(user.email), role: user.role },
+-    'self-serve signup succeeded tokens issued',
+-  );
+-  return tokens;
+-}
++  async signup(dto: SignUpDto): Promise<TokenPair> {
++    const user = await this.userService.create(dto.email, dto.password, dto.role, {
++      firstName: dto.firstName,
++      lastName: dto.lastName,
++      phoneNumber: dto.phoneNumber,
++      state: dto.state,
++      lga: dto.lga,
++      address: dto.address,
++      identityType: dto.identityType,
++      identityNumber: dto.identityNumber,
++      bankName: dto.bankName,
++      bankAccountNumber: dto.bankAccountNumber,
++    });
++    const tokens = await this.issueTokenPair(user);
++    this.logger.log(
++      { email: maskEmail(user.email), role: user.role },
++      'self-serve signup succeeded tokens issued',
++    );
++    return tokens;
++  }
+ 
+-  async signupAdmin(dto: SignUpDto, createdBy: string): Promise<User> {
++  async signupAdmin(dto: AdminSignUpDto, createdBy: string): Promise<User> {
+     const user = await this.userService.create(
+       dto.email,
+       dto.password,
+diff --git a/api/src/auth/dto/admin-signup.dto.ts b/api/src/auth/dto/admin-signup.dto.ts
+new file mode 100644
+index 0000000..94b1d2d
+--- /dev/null
++++ b/api/src/auth/dto/admin-signup.dto.ts
+@@ -0,0 +1,10 @@
++import { IsEmail, IsString, MinLength } from 'class-validator';
++
++export class AdminSignUpDto {
++  @IsEmail()
++  email!: string;
++
++  @IsString()
++  @MinLength(8)
++  password!: string;
++}
+diff --git a/api/src/auth/dto/signup.dto.ts b/api/src/auth/dto/signup.dto.ts
+index d9b7da7..cdb4724 100644
+--- a/api/src/auth/dto/signup.dto.ts
++++ b/api/src/auth/dto/signup.dto.ts
+@@ -1,11 +1,13 @@
+ import {
+   IsEmail,
++  IsEnum,
+   IsIn,
+   IsOptional,
+   IsString,
++  Length,
+   MinLength,
+ } from 'class-validator';
+-import { UserRole } from '@labour-hiring/enums';
++import { IdentityType, UserRole } from '@labour-hiring/enums';
+ 
+ const SELF_SERVE_ROLES = [UserRole.LABOURER, UserRole.EMPLOYER] as const;
+ 
+@@ -20,4 +22,46 @@ export class SignUpDto {
+   @IsOptional()
+   @IsIn(SELF_SERVE_ROLES)
+   role: UserRole.LABOURER | UserRole.EMPLOYER = UserRole.LABOURER;
++
++  // Personal details, collected once at registration.
++  @IsString()
++  @MinLength(2)
++  firstName!: string;
++
++  @IsString()
++  @MinLength(2)
++  lastName!: string;
++
++  @IsString()
++  @Length(11, 11)
++  phoneNumber!: string;
++
++  @IsString()
++  @MinLength(2)
++  state!: string;
++
++  @IsString()
++  @MinLength(2)
++  lga!: string;
++
++  @IsString()
++  @MinLength(5)
++  address!: string;
++
++  // Identity verification — either BVN or NIN, both 11 digits in Nigeria.
++  @IsEnum(IdentityType)
++  identityType!: IdentityType;
++
++  @IsString()
++  @Length(11, 11)
++  identityNumber!: string;
++
++  // Payout details.
++  @IsString()
++  @Length(2, 100)
++  bankName!: string;
++
++  @IsString()
++  @Length(10, 10)
++  bankAccountNumber!: string;
+ }
+diff --git a/api/src/job/dto/update-job.dto.ts b/api/src/job/dto/update-job.dto.ts
+new file mode 100644
+index 0000000..bd3fc2c
+--- /dev/null
++++ b/api/src/job/dto/update-job.dto.ts
+@@ -0,0 +1,4 @@
++import { PartialType } from '@nestjs/mapped-types';
++import { CreateJobDto } from './create-job.dto';
++
++export class UpdateJobDto extends PartialType(CreateJobDto) {}
+diff --git a/api/src/job/job.controller.ts b/api/src/job/job.controller.ts
+index 32ab2e7..6937c74 100644
+--- a/api/src/job/job.controller.ts
++++ b/api/src/job/job.controller.ts
+@@ -1,9 +1,11 @@
+ import {
+   Body,
+   Controller,
++  Delete,
+   Get,
+   Param,
+   ParseUUIDPipe,
++  Patch,
+   Post,
+   Query,
+   UseGuards,
+@@ -12,6 +14,7 @@ import { UserRole } from '@labour-hiring/enums';
+ import { JobService } from './job.service';
+ import { QueryJobsDto } from './dto/query-jobs.dto';
+ import { CreateJobDto } from './dto/create-job.dto';
++import { UpdateJobDto } from './dto/update-job.dto';
+ import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+ import { RolesGuard } from '@/common/guards/roles.guard';
+ import { Roles } from '@/common/decorators/roles.decorator';
+@@ -46,4 +49,25 @@ export class JobController {
+   create(@CurrentUser() user: Payload, @Body() dto: CreateJobDto) {
+     return this.jobService.create(user.sub, dto);
+   }
++
++  @UseGuards(JwtAuthGuard, RolesGuard)
++  @Roles(UserRole.EMPLOYER)
++  @Patch(':id')
++  update(
++    @Param('id', ParseUUIDPipe) id: string,
++    @CurrentUser() user: Payload,
++    @Body() dto: UpdateJobDto,
++  ) {
++    return this.jobService.update(id, user.sub, dto);
++  }
++
++  @UseGuards(JwtAuthGuard, RolesGuard)
++  @Roles(UserRole.EMPLOYER)
++  @Delete(':id')
++  remove(
++    @Param('id', ParseUUIDPipe) id: string,
++    @CurrentUser() user: Payload,
++  ) {
++    return this.jobService.remove(id, user.sub);
++  }
+ }
+diff --git a/api/src/job/job.module.ts b/api/src/job/job.module.ts
+index 2da1f87..773108f 100644
+--- a/api/src/job/job.module.ts
++++ b/api/src/job/job.module.ts
+@@ -1,13 +1,14 @@
+ import { Module } from '@nestjs/common';
+ import { TypeOrmModule } from '@nestjs/typeorm';
+ import { Job } from './entities/job.entity';
++import { Application } from '@/application/entities/application.entity';
+ import { JobService } from './job.service';
+ import { JobController } from './job.controller';
+ import { JobSeeder } from './seeders/job.seeder';
+ import { UserModule } from '@/user/user.module';
+ 
+ @Module({
+-  imports: [TypeOrmModule.forFeature([Job]), UserModule],
++  imports: [TypeOrmModule.forFeature([Job, Application]), UserModule],
+   controllers: [JobController],
+   providers: [JobService, JobSeeder],
+   exports: [JobService],
+diff --git a/api/src/job/job.service.ts b/api/src/job/job.service.ts
+index dacbaae..fbb5558 100644
+--- a/api/src/job/job.service.ts
++++ b/api/src/job/job.service.ts
+@@ -1,8 +1,15 @@
+-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
++import {
++  ConflictException,
++  Injectable,
++  Logger,
++  NotFoundException,
++} from '@nestjs/common';
+ import { InjectRepository } from '@nestjs/typeorm';
+ import { Repository } from 'typeorm';
+ import { JobStatus, PaymentType } from '@labour-hiring/enums';
+ import { Job } from './entities/job.entity';
++import { Application } from '@/application/entities/application.entity';
++import { UpdateJobDto } from './dto/update-job.dto';
+ import { CreateJobDto } from './dto/create-job.dto';
+ import { QueryJobsDto } from './dto/query-jobs.dto';
+ import { QueryMyJobsDto } from './dto/query-my-job.dto';
+@@ -38,6 +45,8 @@ export class JobService {
+ 
+   constructor(
+     @InjectRepository(Job) private readonly jobRepository: Repository<Job>,
++    @InjectRepository(Application)
++    private readonly applicationRepository: Repository<Application>,
+   ) {}
+ 
+   async create(employerId: string, dto: CreateJobDto): Promise<Job> {
+@@ -49,6 +58,56 @@ export class JobService {
+     return saved;
+   }
+ 
++  // Pay is locked as soon as anyone has applied, so a labourer never applies
++  // to one price and finds it changed afterwards. Everything else stays editable.
++  async update(
++    id: string,
++    employerId: string,
++    dto: UpdateJobDto,
++  ): Promise<Job> {
++    const job = await this.findOwned(id, employerId);
++
++    const minChanged =
++      dto.minPay !== undefined && Number(dto.minPay) !== Number(job.minPay);
++    const maxChanged =
++      dto.maxPay !== undefined && Number(dto.maxPay) !== Number(job.maxPay);
++    const paymentTypeChanged =
++      dto.paymentType !== undefined && dto.paymentType !== job.paymentType;
++
++    if (minChanged || maxChanged || paymentTypeChanged) {
++      const applicants = await this.applicationRepository.count({
++        where: { jobId: id },
++      });
++      if (applicants > 0) {
++        throw new ConflictException(
++          'The price of this job cannot be changed because people have already applied',
++        );
++      }
++    }
++
++    const { minPay, maxPay, ...rest } = dto;
++    Object.assign(job, rest);
++    if (minPay !== undefined) job.minPay = minPay;
++    if (maxPay !== undefined) job.maxPay = maxPay;
++
++    if (Number(job.maxPay) < Number(job.minPay)) {
++      throw new ConflictException(
++        'Maximum pay must be at least the minimum pay',
++      );
++    }
++
++    const saved = await this.jobRepository.save(job);
++    this.logger.debug({ jobId: id, employerId }, 'job updated');
++    return saved;
++  }
++
++  async remove(id: string, employerId: string): Promise<{ id: string }> {
++    const job = await this.findOwned(id, employerId);
++    await this.jobRepository.softRemove(job);
++    this.logger.debug({ jobId: id, employerId }, 'job deleted');
++    return { id };
++  }
++
+   async count(): Promise<number> {
+     return this.jobRepository.count();
+   }
+diff --git a/api/src/user/entities/user.entity.ts b/api/src/user/entities/user.entity.ts
+index 47a710e..c07159b 100644
+--- a/api/src/user/entities/user.entity.ts
++++ b/api/src/user/entities/user.entity.ts
+@@ -6,7 +6,7 @@ import {
+   PrimaryGeneratedColumn,
+   UpdateDateColumn,
+ } from 'typeorm';
+-import { UserRole } from '@labour-hiring/enums';
++import { IdentityType, UserRole } from '@labour-hiring/enums';
+ 
+ @Entity()
+ export class User {
+@@ -22,6 +22,40 @@ export class User {
+   @Column({ type: 'enum', enum: UserRole })
+   role!: UserRole;
+ 
++  @Column({ type: 'varchar', nullable: true })
++  firstName?: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  lastName?: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  phoneNumber?: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  state?: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  lga?: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  address?: string;
++
++  @Column({ type: 'enum', enum: IdentityType, nullable: true })
++  identityType?: IdentityType;
++
++  // BVN or NIN, depending on identityType. Sensitive — excluded from
++  // default selects, same as password. Fetch explicitly via addSelect()
++  // only where actually needed.
++  @Column({ type: 'varchar', select: false, nullable: true })
++  identityNumber?: string;
++
++  @Column({ type: 'varchar', nullable: true })
++  bankName?: string;
++
++  // Sensitive payout information — excluded from default selects.
++  @Column({ type: 'varchar', select: false, nullable: true })
++  bankAccountNumber?: string;
++
+   @Column({ type: 'int', default: 0 })
+   tokenVersion!: number;
+ 
+diff --git a/api/src/user/user.service.ts b/api/src/user/user.service.ts
+index 2852766..195686c 100644
+--- a/api/src/user/user.service.ts
++++ b/api/src/user/user.service.ts
+@@ -7,12 +7,25 @@ import {
+ import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+ import { InjectRepository } from '@nestjs/typeorm';
+ import { Repository } from 'typeorm';
+-import { UserRole } from '@labour-hiring/enums';
++import { IdentityType, UserRole } from '@labour-hiring/enums';
+ import { User } from './entities/user.entity';
+ import { HashingService } from '@/auth/common/services/hashing.service';
+ import { maskEmail } from '@/auth/common/utils/mask.util';
+ import { ConfigService } from '@nestjs/config';
+ 
++export interface CreateUserProfile {
++  firstName: string;
++  lastName: string;
++  phoneNumber: string;
++  state: string;
++  lga: string;
++  address: string;
++  identityType: IdentityType;
++  identityNumber: string;
++  bankName: string;
++  bankAccountNumber: string;
++}
++
+ @Injectable()
+ export class UserService {
+   private readonly logger = new Logger(UserService.name);
+@@ -44,7 +57,12 @@ export class UserService {
+     return this.userRepository.findOneBy({ email });
+   }
+ 
+-  async create(email: string, password: string, role: UserRole): Promise<User> {
++  async create(
++    email: string,
++    password: string,
++    role: UserRole,
++    profile?: CreateUserProfile,
++  ): Promise<User> {
+     const existing = await this.findByEmail(email);
+     if (existing) {
+       this.logger.warn(
+@@ -59,6 +77,7 @@ export class UserService {
+       email,
+       password: hashedPassword,
+       role,
++      ...profile,
+     });
+     const saved = await this.userRepository.save(user);
+ 
+diff --git a/packages/enums/src/identity-type.enum.ts b/packages/enums/src/identity-type.enum.ts
+new file mode 100644
+index 0000000..3914ef9
+--- /dev/null
++++ b/packages/enums/src/identity-type.enum.ts
+@@ -0,0 +1,4 @@
++export enum IdentityType {
++  BVN = "bvn",
++  NIN = "nin",
++}
+diff --git a/packages/enums/src/index.ts b/packages/enums/src/index.ts
+index 5c632a2..1a0aebc 100644
+--- a/packages/enums/src/index.ts
++++ b/packages/enums/src/index.ts
+@@ -2,3 +2,4 @@ export * from "./user-role.enum";
+ export * from "./job-status.enum";
+ export * from "./payment-type.enum";
+ export * from "./application-status.enum";
++export * from "./identity-type.enum";
+diff --git a/web/app/(dashboard)/dashboard/page.tsx b/web/app/(dashboard)/dashboard/page.tsx
+index 1d6e2df..c1eaefa 100644
+--- a/web/app/(dashboard)/dashboard/page.tsx
++++ b/web/app/(dashboard)/dashboard/page.tsx
+@@ -2,6 +2,7 @@
+ 
+ import Link from "next/link";
+ import { buttonVariants } from "@/components/ui/button";
++import { LabourerDashboard } from "@/components/jobs/labourer-dashboard";
+ import { useCurrentUser } from "@/hooks/use-current-user";
+ import { cn } from "cn";
+ 
+@@ -38,23 +39,5 @@ export default function DashboardPage() {
+     );
+   }
+ 
+-  return (
+-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center gap-4 p-4 text-center">
+-      <h1 className="text-2xl font-bold">Welcome back</h1>
+-      <p className="text-muted-foreground">
+-        Find your next opportunity or check on jobs you&apos;ve applied to.
+-      </p>
+-      <div className="flex gap-3">
+-        <Link href="/jobs" className={cn(buttonVariants())}>
+-          Browse Jobs
+-        </Link>
+-        <Link
+-          href="/applications"
+-          className={cn(buttonVariants({ variant: "outline" }))}
+-        >
+-          My Applications
+-        </Link>
+-      </div>
+-    </div>
+-  );
++  return <LabourerDashboard />;
+ }
+diff --git a/web/app/(dashboard)/employer/jobs/[id]/edit/page.tsx b/web/app/(dashboard)/employer/jobs/[id]/edit/page.tsx
+new file mode 100644
+index 0000000..0f533ec
+--- /dev/null
++++ b/web/app/(dashboard)/employer/jobs/[id]/edit/page.tsx
+@@ -0,0 +1,54 @@
++"use client";
++
++import { useEffect, useState } from "react";
++import { useParams, useRouter } from "next/navigation";
++import { PostJobForm } from "@/components/jobs/post-job-form";
++import { useCurrentUser } from "@/hooks/use-current-user";
++import { ApiError } from "@/lib/api/api-error";
++import { jobsApi } from "@/lib/job";
++import type { Job } from "@/types/job";
++
++export default function EditJobPage() {
++  const { id } = useParams<{ id: string }>();
++  const router = useRouter();
++  const { user, isLoading: isLoadingUser } = useCurrentUser();
++  const [job, setJob] = useState<Job | null>(null);
++  const [priceLocked, setPriceLocked] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    if (!isLoadingUser && user && user.role !== "employer") {
++      router.replace("/dashboard");
++    }
++  }, [isLoadingUser, user, router]);
++
++  useEffect(() => {
++    async function load() {
++      try {
++        // /jobs/:id only returns open jobs, so find it among the employer's own.
++        const [mine, applicants] = await Promise.all([
++          jobsApi.mine(1, 100),
++          jobsApi.applicantsForJob(id, 1, 1),
++        ]);
++        const found = mine?.data?.data.find((j) => j.id === id) ?? null;
++        if (!found) throw new ApiError("Job not found");
++        setJob(found);
++        setPriceLocked((applicants?.data?.total ?? 0) > 0);
++      } catch (err) {
++        setError(err instanceof ApiError ? err.message : "Failed to load job");
++      }
++    }
++    load();
++  }, [id]);
++
++  return (
++    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
++      <h1 className="text-2xl font-bold">Edit Job</h1>
++      {error && <p className="text-sm text-destructive">{error}</p>}
++      {!job && !error && (
++        <p className="text-sm text-muted-foreground">Loading...</p>
++      )}
++      {job && <PostJobForm job={job} priceLocked={priceLocked} />}
++    </div>
++  );
++}
+diff --git a/web/app/(dashboard)/employer/jobs/page.tsx b/web/app/(dashboard)/employer/jobs/page.tsx
+index 000072d..dcc1b65 100644
+--- a/web/app/(dashboard)/employer/jobs/page.tsx
++++ b/web/app/(dashboard)/employer/jobs/page.tsx
+@@ -5,7 +5,8 @@ import Link from "next/link";
+ import { useRouter } from "next/navigation";
+ import { Badge } from "@/components/ui/badge";
+ import { Card } from "@/components/ui/card";
+-import { buttonVariants } from "@/components/ui/button";
++import { Button, buttonVariants } from "@/components/ui/button";
++import { toast } from "sonner";
+ import { ApiError } from "@/lib/api/api-error";
+ import type { Job } from "@/types/job";
+ import { jobsApi } from "@/lib/job";
+@@ -51,6 +52,17 @@ export default function EmployerJobsPage() {
+     fetchJobs();
+   }, []);
+ 
++  async function handleDelete(job: Job) {
++    if (!window.confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
++    try {
++      await jobsApi.remove(job.id);
++      setJobs((current) => current.filter((j) => j.id !== job.id));
++      toast.success("Job deleted");
++    } catch (err) {
++      toast.error(err instanceof ApiError ? err.message : "Failed to delete job");
++    }
++  }
++
+   return (
+     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4">
+       <div className="flex items-center justify-between">
+@@ -90,6 +102,19 @@ export default function EmployerJobsPage() {
+             >
+               View Applicants
+             </Link>
++            <Link
++              href={`/employer/jobs/${job.id}/edit`}
++              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
++            >
++              Edit
++            </Link>
++            <Button
++              variant="outline"
++              size="sm"
++              onClick={() => handleDelete(job)}
++            >
++              Delete
++            </Button>
+           </div>
+         </Card>
+       ))}
+diff --git a/web/app/layout.tsx b/web/app/layout.tsx
+index b7972d7..0a476d2 100644
+--- a/web/app/layout.tsx
++++ b/web/app/layout.tsx
+@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
+ });
+ 
+ export const metadata: Metadata = {
+-  title: "Create Next App",
+-  description: "Generated by create next app",
++  title: "JobLink – Labour hiring made simple",
++  description: "Connect employers with skilled labourers. Post jobs, apply, and get paid.",
+ };
+ 
+ export default function RootLayout({ children }: LayoutProps<"/">) {
+diff --git a/web/app/page.tsx b/web/app/page.tsx
+index c887311..a051169 100644
+--- a/web/app/page.tsx
++++ b/web/app/page.tsx
+@@ -1,69 +1,170 @@
+-import Image from "next/image";
++import Link from "next/link";
++import {
++  BadgeCheck,
++  Briefcase,
++  HardHat,
++  Search,
++  ShieldCheck,
++  Wallet,
++} from "lucide-react";
++import { buttonVariants } from "@/components/ui/button";
++import { Card } from "@/components/ui/card";
++import { cn } from "cn";
++
++const STEPS = [
++  {
++    icon: Search,
++    title: "Find work or talent",
++    body: "Labourers browse open jobs by skill and pay. Employers post a job in minutes.",
++  },
++  {
++    icon: BadgeCheck,
++    title: "Apply and get chosen",
++    body: "Apply with one click. Employers review applicants and accept or reject them.",
++  },
++  {
++    icon: Wallet,
++    title: "Get paid",
++    body: "Your verified bank details are saved once at sign up, so payout is simple.",
++  },
++];
++
++const FEATURES = [
++  {
++    icon: ShieldCheck,
++    title: "Verified people",
++    body: "Every account is registered with a BVN or NIN, phone number and address.",
++  },
++  {
++    icon: Briefcase,
++    title: "Fair, stable pricing",
++    body: "Once someone has applied, a job's pay cannot be changed under them.",
++  },
++  {
++    icon: HardHat,
++    title: "Built for labour",
++    body: "Skills-based search for loaders, painters, plumbers, drivers and more.",
++  },
++];
+ 
+ export default function Home() {
+   return (
+-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
+-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+-        <Image
+-          className="dark:invert h-5 w-[100px]"
+-          src="/next.svg"
+-          alt="Next.js logo"
+-          width={100}
+-          height={20}
+-          priority
+-        />
+-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
+-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
+-            To get started, edit the{" "}
+-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
+-              page.tsx
+-            </code>{" "}
+-            file.
++    <div className="flex min-h-screen flex-col">
++      <header className="border-b bg-background">
++        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
++          <Link href="/" className="flex items-center gap-2 font-semibold">
++            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
++              J
++            </span>
++            JobLink
++          </Link>
++          <nav className="flex items-center gap-2">
++            <Link
++              href="/signin"
++              className={cn(buttonVariants({ variant: "ghost" }))}
++            >
++              Sign in
++            </Link>
++            <Link href="/signup" className={cn(buttonVariants())}>
++              Get started
++            </Link>
++          </nav>
++        </div>
++      </header>
++
++      <main className="flex-1">
++        <section className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 py-20 text-center md:py-28">
++          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
++            Labour hiring made simple
++          </span>
++          <h1 className="text-4xl font-bold tracking-tight md:text-6xl">
++            Hire reliable labourers. Find honest work.
+           </h1>
+-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+-            Looking for a starting point or more instructions? Head over to{" "}
+-            <a
+-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-              className="font-medium text-zinc-950 dark:text-zinc-50"
++          <p className="max-w-2xl text-lg text-muted-foreground">
++            JobLink connects employers with skilled labourers across Nigeria.
++            Post a job, review applicants, and get the work done.
++          </p>
++          <div className="flex flex-wrap justify-center gap-3">
++            <Link
++              href="/signup"
++              className={cn(buttonVariants({ size: "lg" }))}
+             >
+-              Templates
+-            </a>{" "}
+-            or the{" "}
+-            <a
+-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-              className="font-medium text-zinc-950 dark:text-zinc-50"
++              I&apos;m looking for work
++            </Link>
++            <Link
++              href="/signup"
++              className={cn(buttonVariants({ size: "lg", variant: "outline" }))}
+             >
+-              Learning
+-            </a>{" "}
+-            center.
+-          </p>
+-        </div>
+-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+-          <a
+-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
+-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-            target="_blank"
+-            rel="noopener noreferrer"
+-          >
+-            <Image
+-              className="dark:invert h-[14px] w-4"
+-              src="/vercel.svg"
+-              alt="Vercel logomark"
+-              width={16}
+-              height={14}
+-            />
+-            Deploy Now
+-          </a>
+-          <a
+-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
+-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+-            target="_blank"
+-            rel="noopener noreferrer"
+-          >
+-            Documentation
+-          </a>
+-        </div>
++              I&apos;m hiring
++            </Link>
++          </div>
++        </section>
++
++        <section className="border-y bg-muted/30">
++          <div className="mx-auto max-w-6xl px-4 py-16">
++            <h2 className="mb-10 text-center text-2xl font-bold">
++              How it works
++            </h2>
++            <div className="grid gap-4 md:grid-cols-3">
++              {STEPS.map((step, index) => (
++                <Card key={step.title} className="gap-3 p-6">
++                  <div className="flex items-center gap-3">
++                    <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
++                      <step.icon className="size-5" />
++                    </span>
++                    <span className="text-sm text-muted-foreground">
++                      Step {index + 1}
++                    </span>
++                  </div>
++                  <h3 className="font-semibold">{step.title}</h3>
++                  <p className="text-sm text-muted-foreground">{step.body}</p>
++                </Card>
++              ))}
++            </div>
++          </div>
++        </section>
++
++        <section className="mx-auto max-w-6xl px-4 py-16">
++          <h2 className="mb-10 text-center text-2xl font-bold">
++            Why JobLink
++          </h2>
++          <div className="grid gap-6 md:grid-cols-3">
++            {FEATURES.map((feature) => (
++              <div key={feature.title} className="flex flex-col gap-2">
++                <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
++                  <feature.icon className="size-5" />
++                </span>
++                <h3 className="font-semibold">{feature.title}</h3>
++                <p className="text-sm text-muted-foreground">{feature.body}</p>
++              </div>
++            ))}
++          </div>
++        </section>
++
++        <section className="mx-auto max-w-4xl px-4 pb-20">
++          <Card className="items-center gap-4 bg-primary p-10 text-center text-primary-foreground">
++            <h2 className="text-2xl font-bold">Ready to get started?</h2>
++            <p className="max-w-lg text-primary-foreground/80">
++              Create a free account and start hiring or applying today.
++            </p>
++            <Link
++              href="/signup"
++              className={cn(buttonVariants({ variant: "secondary", size: "lg" }))}
++            >
++              Create your account
++            </Link>
++          </Card>
++        </section>
+       </main>
++
++      <footer className="border-t">
++        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6 text-sm text-muted-foreground">
++          <span>© {new Date().getFullYear()} JobLink</span>
++          <Link href="/signin" className="hover:text-foreground">
++            Sign in
++          </Link>
++        </div>
++      </footer>
+     </div>
+   );
+ }
+diff --git a/web/components/auth/signup-form.tsx b/web/components/auth/signup-form.tsx
+index 0e868e4..0f125cb 100644
+--- a/web/components/auth/signup-form.tsx
++++ b/web/components/auth/signup-form.tsx
+@@ -28,8 +28,43 @@ const signupSchema = z.object({
+   email: z.string().email("Invalid email"),
+   password: z.string().min(8, "Password must be at least 8 characters"),
+   role: z.enum(["labourer", "employer"]),
++  firstName: z.string().min(2, "First name is required"),
++  lastName: z.string().min(2, "Last name is required"),
++  phoneNumber: z.string().regex(/^\d{11}$/, "Phone number must be 11 digits"),
++  state: z.string().min(2, "State is required"),
++  lga: z.string().min(2, "LGA is required"),
++  address: z.string().min(5, "Address must be at least 5 characters"),
++  identityType: z.enum(["bvn", "nin"]),
++  identityNumber: z.string().regex(/^\d{11}$/, "Must be 11 digits"),
++  bankName: z.string().min(2, "Bank name is required"),
++  bankAccountNumber: z
++    .string()
++    .regex(/^\d{10}$/, "Account number must be 10 digits"),
+ });
+ 
++const TEXT_FIELDS: {
++  name: Exclude<keyof z.infer<typeof signupSchema>, "role" | "identityType" | "password" | "email">;
++  label: string;
++  placeholder: string;
++  half?: boolean;
++}[] = [
++  { name: "firstName", label: "First name", placeholder: "Aisha", half: true },
++  { name: "lastName", label: "Last name", placeholder: "Bello", half: true },
++  { name: "phoneNumber", label: "Phone number", placeholder: "08012345678" },
++  { name: "state", label: "State", placeholder: "Niger", half: true },
++  { name: "lga", label: "LGA", placeholder: "Chanchaga", half: true },
++  { name: "address", label: "Address", placeholder: "12 Bosso Road" },
++];
++
++const BANK_FIELDS: typeof TEXT_FIELDS = [
++  { name: "bankName", label: "Bank name", placeholder: "e.g. GTBank" },
++  {
++    name: "bankAccountNumber",
++    label: "Account number",
++    placeholder: "10-digit account number",
++  },
++];
++
+ export type SignupValues = z.infer<typeof signupSchema>;
+ 
+ const ROLE_OPTIONS: {
+@@ -61,7 +96,21 @@ export function SignupForm() {
+     setError,
+   } = useForm<SignupValues>({
+     resolver: zodResolver(signupSchema),
+-    defaultValues: { email: "", password: "", role: "labourer" },
++    defaultValues: {
++      email: "",
++      password: "",
++      role: "labourer",
++      firstName: "",
++      lastName: "",
++      phoneNumber: "",
++      state: "",
++      lga: "",
++      address: "",
++      identityType: "bvn",
++      identityNumber: "",
++      bankName: "",
++      bankAccountNumber: "",
++    },
+   });
+ 
+   const { isBusy, markRedirecting } = useFormSubmission();
+@@ -79,11 +128,26 @@ export function SignupForm() {
+     }
+   };
+   const busy = isBusy(isSubmitting);
++
++  const renderTextField = (f: (typeof TEXT_FIELDS)[number]) => (
++    <Controller
++      key={f.name}
++      name={f.name}
++      control={control}
++      render={({ field }) => (
++        <Field data-invalid={!!errors[f.name]}>
++          <FieldLabel>{f.label}</FieldLabel>
++          <Input placeholder={f.placeholder} {...field} />
++          {errors[f.name] && <FieldError>{errors[f.name]?.message}</FieldError>}
++        </Field>
++      )}
++    />
++  );
+   return (
+-    <Card className="w-full max-w-md mx-auto">
++    <Card className="w-full max-w-lg mx-auto">
+       <CardHeader>
+         <CardTitle>Create an account</CardTitle>
+-        <CardDescription>Enter your email and password</CardDescription>
++        <CardDescription>Tell us a bit about yourself</CardDescription>
+       </CardHeader>
+       <CardContent>
+         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+@@ -148,6 +212,59 @@ export function SignupForm() {
+             )}
+           />
+ 
++          <p className="pt-2 text-sm font-medium">Personal details</p>
++          <div className="grid grid-cols-2 gap-4">
++            {TEXT_FIELDS.map((f) => (
++              <div key={f.name} className={f.half ? "" : "col-span-2"}>
++                {renderTextField(f)}
++              </div>
++            ))}
++          </div>
++
++          <p className="pt-2 text-sm font-medium">Identity verification</p>
++          <Controller
++            name="identityType"
++            control={control}
++            render={({ field }) => (
++              <Field>
++                <div className="grid grid-cols-2 gap-2">
++                  {(["bvn", "nin"] as const).map((type) => (
++                    <button
++                      key={type}
++                      type="button"
++                      onClick={() => field.onChange(type)}
++                      aria-pressed={field.value === type}
++                      className={cn(
++                        "rounded-lg border px-3 py-1.5 text-sm font-medium uppercase transition-colors",
++                        field.value === type
++                          ? "border-primary bg-primary/5 text-primary"
++                          : "border-input hover:bg-muted/50",
++                      )}
++                    >
++                      {type}
++                    </button>
++                  ))}
++                </div>
++              </Field>
++            )}
++          />
++          <Controller
++            name="identityNumber"
++            control={control}
++            render={({ field }) => (
++              <Field data-invalid={!!errors.identityNumber}>
++                <FieldLabel>BVN / NIN number</FieldLabel>
++                <Input placeholder="11-digit number" {...field} />
++                {errors.identityNumber && (
++                  <FieldError>{errors.identityNumber.message}</FieldError>
++                )}
++              </Field>
++            )}
++          />
++
++          <p className="pt-2 text-sm font-medium">Bank details</p>
++          {BANK_FIELDS.map(renderTextField)}
++
+           <Button type="submit" className="w-full" disabled={busy}>
+             {busy ? "Loading..." : "Sign Up"}
+           </Button>
+diff --git a/web/components/jobs/apply-job-form.tsx b/web/components/jobs/apply-job-form.tsx
+index 48ea2fc..6851d34 100644
+--- a/web/components/jobs/apply-job-form.tsx
++++ b/web/components/jobs/apply-job-form.tsx
+@@ -1,106 +1,38 @@
+ "use client";
+ 
+-import { useForm, Controller } from "react-hook-form";
+-import { zodResolver } from "@hookform/resolvers/zod";
+-import { z } from "zod";
+ import { useRouter } from "next/navigation";
+ import { useState } from "react";
+ import { Button } from "@/components/ui/button";
+-import { Input } from "@/components/ui/input";
+-import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+-import { applyFieldError } from "@/lib/apply-field-error";
+ import { ApiError } from "@/lib/api/api-error";
+ import { jobsApi } from "@/lib/job";
+ 
+-const applySchema = z.object({
+-  bankName: z.string().min(2, "Bank name is required"),
+-  bankAccountNumber: z.string().length(10, "Account number must be 10 digits"),
+-  bvn: z.string().length(11, "BVN must be 11 digits"),
+-});
+-
+-type ApplyValues = z.infer<typeof applySchema>;
+-
+ export function ApplyJobForm({ jobId }: { jobId: string }) {
+   const router = useRouter();
+-  const {
+-    control,
+-    handleSubmit,
+-    formState: { errors },
+-    setError,
+-  } = useForm<ApplyValues>({
+-    resolver: zodResolver(applySchema),
+-    defaultValues: { bankName: "", bankAccountNumber: "", bvn: "" },
+-  });
+-
+   const [isLoading, setIsLoading] = useState(false);
+   const [submitError, setSubmitError] = useState<string | null>(null);
+ 
+-  const onSubmit = async (data: ApplyValues) => {
++  const onApply = async () => {
+     try {
+       setIsLoading(true);
+       setSubmitError(null);
+-      await jobsApi.apply(jobId, data);
++      await jobsApi.apply(jobId);
+       router.push("/applications?applied=success");
+     } catch (error) {
+-      if (error instanceof ApiError) {
+-        const handledFieldError = applyFieldError(error, setError);
+-        if (!handledFieldError) setSubmitError(error.message);
+-      }
++      if (error instanceof ApiError) setSubmitError(error.message);
+       setIsLoading(false);
+     }
+   };
+ 
+   return (
+-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
++    <div className="flex flex-col gap-4">
+       <p className="text-sm text-muted-foreground">
+-        We need your payout details to process payment if you&apos;re hired.
++        Your profile and payout details from sign up will be used if
++        you&apos;re hired.
+       </p>
+-
+-      <Controller
+-        name="bankName"
+-        control={control}
+-        render={({ field }) => (
+-          <Field data-invalid={!!errors.bankName}>
+-            <FieldLabel>Bank name</FieldLabel>
+-            <Input placeholder="e.g. GTBank" {...field} />
+-            {errors.bankName && (
+-              <FieldError>{errors.bankName.message}</FieldError>
+-            )}
+-          </Field>
+-        )}
+-      />
+-
+-      <Controller
+-        name="bankAccountNumber"
+-        control={control}
+-        render={({ field }) => (
+-          <Field data-invalid={!!errors.bankAccountNumber}>
+-            <FieldLabel>Account number</FieldLabel>
+-            <Input placeholder="10-digit account number" {...field} />
+-            {errors.bankAccountNumber && (
+-              <FieldError>{errors.bankAccountNumber.message}</FieldError>
+-            )}
+-          </Field>
+-        )}
+-      />
+-
+-      <Controller
+-        name="bvn"
+-        control={control}
+-        render={({ field }) => (
+-          <Field data-invalid={!!errors.bvn}>
+-            <FieldLabel>BVN</FieldLabel>
+-            <Input placeholder="11-digit BVN" {...field} />
+-            {errors.bvn && <FieldError>{errors.bvn.message}</FieldError>}
+-          </Field>
+-        )}
+-      />
+-
+       {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+-
+-      <Button type="submit" disabled={isLoading}>
++      <Button onClick={onApply} disabled={isLoading}>
+         {isLoading ? "Submitting..." : "Submit Application"}
+       </Button>
+-    </form>
++    </div>
+   );
+ }
+diff --git a/web/components/jobs/labourer-dashboard.tsx b/web/components/jobs/labourer-dashboard.tsx
+new file mode 100644
+index 0000000..7b30d17
+--- /dev/null
++++ b/web/components/jobs/labourer-dashboard.tsx
+@@ -0,0 +1,160 @@
++"use client";
++
++import { useEffect, useState } from "react";
++import Link from "next/link";
++import { Badge } from "@/components/ui/badge";
++import { buttonVariants } from "@/components/ui/button";
++import { Card } from "@/components/ui/card";
++import { ApiError } from "@/lib/api/api-error";
++import { jobsApi } from "@/lib/job";
++import type { Application, Job } from "@/types/job";
++import { cn } from "cn";
++
++const STATUS_VARIANT: Record<
++  Application["status"],
++  "default" | "secondary" | "success" | "outline"
++> = {
++  pending: "secondary",
++  accepted: "success",
++  rejected: "outline",
++  withdrawn: "outline",
++};
++
++function formatPay(job: Job): string {
++  const suffix = job.paymentType === "hourly" ? "/hr" : "";
++  return `₦${Number(job.minPay).toLocaleString()} – ₦${Number(job.maxPay).toLocaleString()}${suffix}`;
++}
++
++export function LabourerDashboard() {
++  const [applications, setApplications] = useState<Application[]>([]);
++  const [totalApplications, setTotalApplications] = useState(0);
++  const [latestJobs, setLatestJobs] = useState<Job[]>([]);
++  const [isLoading, setIsLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++
++  useEffect(() => {
++    async function load() {
++      try {
++        const [apps, jobs] = await Promise.all([
++          jobsApi.myApplications(1, 50),
++          jobsApi.list({ limit: 5, sort: "newest" }),
++        ]);
++        setApplications(apps?.data?.data ?? []);
++        setTotalApplications(apps?.data?.total ?? 0);
++        setLatestJobs(jobs?.data?.data ?? []);
++      } catch (err) {
++        setError(
++          err instanceof ApiError ? err.message : "Failed to load dashboard",
++        );
++      } finally {
++        setIsLoading(false);
++      }
++    }
++    load();
++  }, []);
++
++  const count = (status: Application["status"]) =>
++    applications.filter((a) => a.status === status).length;
++
++  const stats = [
++    { label: "Total applications", value: totalApplications },
++    { label: "Pending", value: count("pending") },
++    { label: "Accepted", value: count("accepted") },
++    { label: "Rejected", value: count("rejected") },
++  ];
++
++  return (
++    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4">
++      <div className="flex flex-wrap items-center justify-between gap-3">
++        <div>
++          <h1 className="text-2xl font-bold">Welcome back</h1>
++          <p className="text-sm text-muted-foreground">
++            Track your applications and find your next job.
++          </p>
++        </div>
++        <Link href="/jobs" className={cn(buttonVariants())}>
++          Browse Jobs
++        </Link>
++      </div>
++
++      {error && <p className="text-sm text-destructive">{error}</p>}
++
++      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
++        {stats.map((stat) => (
++          <Card key={stat.label} className="gap-1 p-4">
++            <p className="text-xs text-muted-foreground">{stat.label}</p>
++            <p className="text-2xl font-bold">{isLoading ? "–" : stat.value}</p>
++          </Card>
++        ))}
++      </div>
++
++      <div className="grid gap-6 md:grid-cols-2">
++        <section className="flex flex-col gap-3">
++          <div className="flex items-center justify-between">
++            <h2 className="font-semibold">Recent applications</h2>
++            <Link
++              href="/applications"
++              className="text-sm text-primary hover:underline"
++            >
++              View all
++            </Link>
++          </div>
++          {isLoading && (
++            <p className="text-sm text-muted-foreground">Loading...</p>
++          )}
++          {!isLoading && applications.length === 0 && (
++            <p className="text-sm text-muted-foreground">
++              You haven&apos;t applied to any jobs yet.
++            </p>
++          )}
++          {applications.slice(0, 5).map((application) => (
++            <Card
++              key={application.id}
++              className="flex-row items-center justify-between p-3"
++            >
++              <div className="min-w-0">
++                <p className="truncate text-sm font-medium">
++                  {application.job?.title ?? "Job"}
++                </p>
++                <p className="truncate text-xs text-muted-foreground">
++                  {application.job?.companyName}
++                </p>
++              </div>
++              <Badge variant={STATUS_VARIANT[application.status]}>
++                {application.status}
++              </Badge>
++            </Card>
++          ))}
++        </section>
++
++        <section className="flex flex-col gap-3">
++          <div className="flex items-center justify-between">
++            <h2 className="font-semibold">Latest jobs</h2>
++            <Link href="/jobs" className="text-sm text-primary hover:underline">
++              See more
++            </Link>
++          </div>
++          {!isLoading && latestJobs.length === 0 && (
++            <p className="text-sm text-muted-foreground">
++              No open jobs right now.
++            </p>
++          )}
++          {latestJobs.map((job) => (
++            <Link key={job.id} href={`/jobs/${job.id}`}>
++              <Card className="gap-1 p-3 transition-colors hover:bg-muted/50">
++                <p className="text-sm font-medium">{job.title}</p>
++                <p className="text-xs text-muted-foreground">
++                  {job.companyName}
++                  {job.location ? ` · ${job.location}` : ""}
++                </p>
++                <p className="text-xs font-medium text-primary">
++                  {formatPay(job)}
++                </p>
++              </Card>
++            </Link>
++          ))}
++        </section>
++      </div>
++    </div>
++  );
++}
+diff --git a/web/components/jobs/post-job-form.tsx b/web/components/jobs/post-job-form.tsx
+index 55ce8ca..3f1c143 100644
+--- a/web/components/jobs/post-job-form.tsx
++++ b/web/components/jobs/post-job-form.tsx
+@@ -11,7 +11,7 @@ import { Field, FieldLabel, FieldError } from "@/components/ui/field";
+ import { applyFieldError } from "@/lib/apply-field-error";
+ import { ApiError } from "@/lib/api/api-error";
+ import { jobsApi } from "@/lib/job";
+-import type { CreateJobDto, PaymentType } from "@/types/job";
++import type { CreateJobDto, Job, PaymentType } from "@/types/job";
+ import { cn } from "cn";
+ 
+ const NUMERIC_PATTERN = /^\d+(\.\d{1,2})?$/;
+@@ -56,7 +56,14 @@ const PAYMENT_TYPE_OPTIONS: { value: PaymentType; label: string }[] = [
+   { value: "hourly", label: "Hourly rate" },
+ ];
+ 
+-export function PostJobForm() {
++export function PostJobForm({
++  job,
++  priceLocked = false,
++}: {
++  job?: Job;
++  priceLocked?: boolean;
++}) {
++  const isEdit = !!job;
+   const router = useRouter();
+   const {
+     control,
+@@ -66,15 +73,15 @@ export function PostJobForm() {
+   } = useForm<PostJobValues>({
+     resolver: zodResolver(postJobSchema),
+     defaultValues: {
+-      title: "",
+-      companyName: "",
+-      description: "",
+-      location: "",
+-      paymentType: "fixed",
+-      minPay: "",
+-      maxPay: "",
+-      minExperienceYears: "",
+-      skills: "",
++      title: job?.title ?? "",
++      companyName: job?.companyName ?? "",
++      description: job?.description ?? "",
++      location: job?.location ?? "",
++      paymentType: job?.paymentType ?? "fixed",
++      minPay: job ? String(Number(job.minPay)) : "",
++      maxPay: job ? String(Number(job.maxPay)) : "",
++      minExperienceYears: job ? String(job.minExperienceYears) : "",
++      skills: job?.skills.join(", ") ?? "",
+     },
+   });
+ 
+@@ -105,7 +112,15 @@ export function PostJobForm() {
+           : undefined,
+       };
+ 
+-      await jobsApi.create(payload);
++      if (job) {
++        // Pay fields are locked once someone applies; never send them then.
++        const update = priceLocked
++          ? (({ minPay, maxPay, paymentType, ...rest }) => rest)(payload)
++          : payload;
++        await jobsApi.update(job.id, update);
++      } else {
++        await jobsApi.create(payload);
++      }
+       router.push("/employer/jobs");
+     } catch (error) {
+       if (error instanceof ApiError) {
+@@ -190,6 +205,7 @@ export function PostJobForm() {
+                 <button
+                   key={option.value}
+                   type="button"
++                  disabled={priceLocked}
+                   onClick={() => field.onChange(option.value)}
+                   aria-pressed={field.value === option.value}
+                   className={cn(
+@@ -207,6 +223,13 @@ export function PostJobForm() {
+         )}
+       />
+ 
++      {priceLocked && (
++        <p className="text-sm text-muted-foreground">
++          Pay can&apos;t be changed because people have already applied to this
++          job.
++        </p>
++      )}
++
+       <div className="grid grid-cols-2 gap-4">
+         <Controller
+           name="minPay"
+@@ -214,7 +237,12 @@ export function PostJobForm() {
+           render={({ field }) => (
+             <Field data-invalid={!!errors.minPay}>
+               <FieldLabel>Minimum pay</FieldLabel>
+-              <Input inputMode="decimal" placeholder="e.g. 5000" {...field} />
++              <Input
++                inputMode="decimal"
++                placeholder="e.g. 5000"
++                disabled={priceLocked}
++                {...field}
++              />
+               {errors.minPay && (
+                 <FieldError>{errors.minPay.message}</FieldError>
+               )}
+@@ -228,7 +256,12 @@ export function PostJobForm() {
+           render={({ field }) => (
+             <Field data-invalid={!!errors.maxPay}>
+               <FieldLabel>Maximum pay</FieldLabel>
+-              <Input inputMode="decimal" placeholder="e.g. 8000" {...field} />
++              <Input
++                inputMode="decimal"
++                placeholder="e.g. 8000"
++                disabled={priceLocked}
++                {...field}
++              />
+               {errors.maxPay && (
+                 <FieldError>{errors.maxPay.message}</FieldError>
+               )}
+@@ -266,7 +299,13 @@ export function PostJobForm() {
+       {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+ 
+       <Button type="submit" disabled={isLoading}>
+-        {isLoading ? "Posting..." : "Post Job"}
++        {isLoading
++          ? isEdit
++            ? "Saving..."
++            : "Posting..."
++          : isEdit
++            ? "Save Changes"
++            : "Post Job"}
+       </Button>
+     </form>
+   );
+diff --git a/web/lib/job.ts b/web/lib/job.ts
+index fa611a2..f012b71 100644
+--- a/web/lib/job.ts
++++ b/web/lib/job.ts
+@@ -1,7 +1,6 @@
+ import type {
+   Application,
+   ApplicationStatus,
+-  ApplyJobDto,
+   CreateJobDto,
+   Job,
+   JobQueryParams,
+@@ -9,6 +8,7 @@ import type {
+   PaginatedApplications,
+   PaginatedJobs,
+   PaginatedMyJobs,
++  UpdateJobDto,
+ } from "@/types/job";
+ import { apiClient } from "./api/api-client";
+ 
+@@ -32,8 +32,8 @@ export const jobsApi = {
+ 
+   getById: (id: string) => apiClient.get<Job>(`/jobs/${id}`),
+ 
+-  apply: (jobId: string, payload: ApplyJobDto) =>
+-    apiClient.post<{ id: string }>(`/jobs/${jobId}/apply`, payload),
++  apply: (jobId: string) =>
++    apiClient.post<{ id: string }>(`/jobs/${jobId}/apply`, {}),
+ 
+   myApplications: (page = 1, limit = 10) =>
+     apiClient.get<PaginatedApplications>(
+@@ -42,6 +42,11 @@ export const jobsApi = {
+ 
+   create: (payload: CreateJobDto) => apiClient.post<Job>("/jobs", payload),
+ 
++  update: (id: string, payload: UpdateJobDto) =>
++    apiClient.update<Job>(`/jobs/${id}`, payload),
++
++  remove: (id: string) => apiClient.delete<{ id: string }>(`/jobs/${id}`, {}),
++
+   mine: (page = 1, limit = 10, status?: JobStatus) =>
+     apiClient.get<PaginatedMyJobs>(
+       `/jobs/mine?page=${page}&limit=${limit}${
+diff --git a/web/types/job.ts b/web/types/job.ts
+index b3f7376..fac38a7 100644
+--- a/web/types/job.ts
++++ b/web/types/job.ts
+@@ -87,8 +87,4 @@ export interface JobQueryParams {
+   limit?: number;
+ }
+ 
+-export interface ApplyJobDto {
+-  bankName: string;
+-  bankAccountNumber: string;
+-  bvn: string;
+-}
++export type UpdateJobDto = Partial<CreateJobDto>;

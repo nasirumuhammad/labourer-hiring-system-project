@@ -91,3 +91,23 @@ export interface JobQueryParams {
 export interface ApplyJobDto {
   proposal: string;
 }
+
+export interface PaginatedSavedJobs {
+  data: Job[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface DashboardSummary {
+  profileCompletion: number;
+  stats: {
+    total: number;
+    pending: number;
+    shortlisted: number;
+    rejected: number;
+    saved: number;
+  };
+  recentApplications: Application[];
+  recommendedJobs: (Job & { isSaved: boolean })[];
+}

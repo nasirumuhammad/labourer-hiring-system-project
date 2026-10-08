@@ -23,6 +23,9 @@ import { JobModule } from './job/job.module';
 import { ApplicationModule } from './application/application.module';
 import { UserProfileModule } from './user-profile/user-profile.module';
 import { AdminModule } from './admin/admin.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { SavedJobModule } from './saved-job/saved-job.module';
+import { RecommendationModule } from './recommendation/recommendation.module';
 
 @Module({
   imports: [
@@ -45,6 +48,9 @@ import { AdminModule } from './admin/admin.module';
     BullModule.forRootAsync(bullConfig),
     UserProfileModule,
     AdminModule,
+    DashboardModule,
+    SavedJobModule,
+    RecommendationModule,
   ],
   controllers: [AppController],
   providers: [

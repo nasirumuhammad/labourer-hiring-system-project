@@ -1,96 +1,28 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ArrowUpRight,
-  Bookmark,
   Briefcase,
-  CalendarCheck,
-  Eye,
+  CircleCheck,
+  CircleSlash,
   MapPin,
-  Search,
-  Star,
+  Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { ApiError } from "@/lib/api/api-error";
+import { jobsApi } from "@/lib/job";
+import type { Job } from "@/types/job";
 
-/**
- * Palette from the reference (map these to your theme tokens if you have them):
- * brand #1DBF73 | ink #0B3D2E | lilac #E9E4FA | mint #E6F4EC | canvas #F5F7F5
- * All data below is static — swap for your API calls (server-side fetch).
- */
-
-const APPLICATION_STATUS = {
-  SHORTLISTED: { label: "Shortlisted", style: "bg-[#E6F4EC] text-[#0B3D2E]" },
-  PENDING: { label: "Pending", style: "bg-[#E9E4FA] text-[#4B3A8F]" },
-  REJECTED: { label: "Not selected", style: "bg-neutral-100 text-neutral-500" },
-} as const;
-
-type StatusKey = keyof typeof APPLICATION_STATUS;
-
-interface Stat {
+interface StatDisplay {
   label: string;
-  value: string;
+  value: number;
   note: string;
   icon: LucideIcon;
 }
 
-const STATS: Stat[] = [
-  { label: "Applications", value: "12", note: "3 this week", icon: Briefcase },
-  { label: "Shortlisted", value: "4", note: "Up from 2", icon: Star },
-  {
-    label: "Interviews",
-    value: "2",
-    note: "Next: Thursday",
-    icon: CalendarCheck,
-  },
-  { label: "Profile views", value: "38", note: "Last 30 days", icon: Eye },
-];
-
-const RECOMMENDED_JOBS = [
-  {
-    title: "Site Electrician",
-    company: "Brightline Construction",
-    location: "Gwarinpa, Abuja",
-    pay: "₦15,000 / day",
-  },
-  {
-    title: "Tile Layer",
-    company: "Arewa Interiors",
-    location: "Wuse 2, Abuja",
-    pay: "₦12,000 / day",
-  },
-  {
-    title: "Welder (Steel Fabrication)",
-    company: "Kado Metalworks",
-    location: "Kado, Abuja",
-    pay: "₦18,000 / day",
-  },
-];
-
-const APPLICATIONS: {
-  role: string;
-  company: string;
-  applied: string;
-  status: StatusKey;
-}[] = [
-  {
-    role: "Plumber",
-    company: "Zenith Estates",
-    applied: "2 days ago",
-    status: "SHORTLISTED",
-  },
-  {
-    role: "Painter",
-    company: "Coral Homes",
-    applied: "4 days ago",
-    status: "PENDING",
-  },
-  {
-    role: "Bricklayer",
-    company: "Northgate Build",
-    applied: "1 week ago",
-    status: "REJECTED",
-  },
-];
-
-function StatCard({ label, value, note, icon: Icon }: Stat) {
+function StatCard({ label, value, note, icon: Icon }: StatDisplay) {
   return (
     <div className="rounded-2xl border border-black/5 bg-white p-5">
       <div className="flex items-center justify-between">
@@ -107,146 +39,159 @@ function StatCard({ label, value, note, icon: Icon }: Stat) {
   );
 }
 
-function JobRow({ job }: { job: (typeof RECOMMENDED_JOBS)[number] }) {
-  return (
-    <li className="flex items-center gap-4 rounded-xl px-3 py-3 transition-colors hover:bg-[#F5F7F5]">
-      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#E9E4FA] text-sm font-semibold text-[#4B3A8F]">
-        {job.company.charAt(0)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium text-[#0B3D2E]">{job.title}</p>
-        <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-neutral-500">
-          {job.company} <span aria-hidden>·</span> <MapPin className="size-3" />{" "}
-          {job.location}
-        </p>
-      </div>
-      <span className="hidden text-sm text-neutral-600 sm:block">
-        {job.pay}
-      </span>
-      <button
-        aria-label="Save job"
-        className="rounded-full p-2 text-neutral-400 hover:bg-white hover:text-[#0B3D2E]"
-      >
-        <Bookmark className="size-4" />
-      </button>
-    </li>
-  );
-}
+export default function EmployerDashboard() {
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [total, setTotal] = useState(0);
+  const [applicantCounts, setApplicantCounts] = useState<
+    Record<string, number>
+  >({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-function ApplicationRow({ item }: { item: (typeof APPLICATIONS)[number] }) {
-  const status = APPLICATION_STATUS[item.status];
-  return (
-    <li className="flex items-center justify-between gap-3 py-3">
-      <div>
-        <p className="text-sm font-medium text-[#0B3D2E]">{item.role}</p>
-        <p className="text-xs text-neutral-500">
-          {item.company} · {item.applied}
-        </p>
-      </div>
-      <span
-        className={`rounded-full px-2.5 py-1 text-xs font-medium ${status.style}`}
-      >
-        {status.label}
-      </span>
-    </li>
-  );
-}
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await jobsApi.mine(1, 50);
+        const list = res?.data?.data ?? [];
+        setJobs(list);
+        setTotal(res?.data?.total ?? list.length);
 
-function ProfileStrengthCard() {
-  return (
-    <section className="relative overflow-hidden rounded-2xl bg-[#0B3D2E] p-6 text-white">
-      <div
-        aria-hidden
-        className="absolute inset-0 opacity-20 [background-image:radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px]"
-      />
-      <div className="relative">
-        <p className="text-sm text-white/70">Profile strength</p>
-        <p className="mt-2 text-4xl font-semibold">72%</p>
-        <div className="mt-4 h-1.5 rounded-full bg-white/15">
-          <div className="h-full w-[72%] rounded-full bg-[#1DBF73]" />
-        </div>
-        <p className="mt-4 text-sm leading-relaxed text-white/80">
-          Add your work references to move up. Complete profiles get shortlisted
-          more often.
-        </p>
-        <button className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-[#1DBF73] px-4 py-2 text-sm font-medium text-[#062A1F] hover:brightness-95">
-          Complete profile <ArrowUpRight className="size-4" />
-        </button>
-      </div>
-    </section>
-  );
-}
+        const recent = list.slice(0, 5);
+        const counts = await Promise.all(
+          recent.map(async (job) => {
+            const r = await jobsApi.applicantsForJob(job.id, 1, 1);
+            return [job.id, r?.data?.total ?? 0] as const;
+          }),
+        );
+        setApplicantCounts(Object.fromEntries(counts));
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : "Failed to load dashboard",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    load();
+  }, []);
 
-export default function DashboardPage() {
+  const open = jobs.filter((j) => j.status === "open").length;
+  const closed = jobs.filter((j) => j.status === "closed").length;
+
+  const stats: StatDisplay[] = [
+    { label: "Jobs posted", value: total, note: "All time", icon: Briefcase },
+    {
+      label: "Open",
+      value: open,
+      note: "Accepting applicants",
+      icon: CircleCheck,
+    },
+    {
+      label: "Closed",
+      value: closed,
+      note: "No longer listed",
+      icon: CircleSlash,
+    },
+  ];
+
   return (
     <main className="min-h-screen bg-[#F5F7F5] px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
-        <header className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm text-neutral-500">Welcome back</p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#0B3D2E]">
-              Find your next job
+              Your hiring at a glance
             </h1>
           </div>
-          <div className="flex w-full max-w-md items-center gap-2 rounded-full border border-black/5 bg-white p-1.5 pl-4">
-            <Search className="size-4 text-neutral-400" />
-            <input
-              placeholder="Search trade or location"
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-400"
-            />
-            <button className="rounded-full bg-[#1DBF73] px-5 py-2 text-sm font-medium text-[#062A1F]">
-              Search
-            </button>
-          </div>
+          <Link
+            href="/employer/jobs/new"
+            className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#1DBF73] px-5 py-2.5 text-sm font-medium text-[#062A1F] hover:brightness-95"
+          >
+            Post a job <ArrowUpRight className="size-4" />
+          </Link>
         </header>
 
-        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {STATS.map((stat) => (
-            <StatCard key={stat.label} {...stat} />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          {stats.map((s) => (
+            <StatCard key={s.label} {...s} value={isLoading ? 0 : s.value} />
           ))}
         </section>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <section className="rounded-2xl border border-black/5 bg-white p-4 lg:col-span-2">
             <div className="flex items-center justify-between px-3 pb-2 pt-2">
-              <h2 className="font-semibold text-[#0B3D2E]">
-                Recommended for you
-              </h2>
-              <a
-                href="/dashboard/jobs"
+              <h2 className="font-semibold text-[#0B3D2E]">Recent listings</h2>
+              <Link
+                href="/employer/jobs"
                 className="text-sm text-[#12915A] hover:underline"
               >
-                View all
-              </a>
+                Manage all
+              </Link>
             </div>
-            <ul>
-              {RECOMMENDED_JOBS.map((job) => (
-                <JobRow key={job.title} job={job} />
-              ))}
-            </ul>
-          </section>
-
-          <div className="space-y-6">
-            <ProfileStrengthCard />
-            <section className="rounded-2xl border border-black/5 bg-white p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-[#0B3D2E]">
-                  My applications
-                </h2>
-                <a
-                  href="/dashboard/applications"
-                  className="text-sm text-[#12915A] hover:underline"
-                >
-                  See all
-                </a>
-              </div>
-              <ul className="mt-2 divide-y divide-black/5">
-                {APPLICATIONS.map((item) => (
-                  <ApplicationRow key={item.role} item={item} />
+            {!isLoading && jobs.length === 0 ? (
+              <p className="px-3 py-6 text-sm text-neutral-500">
+                You haven&apos;t posted any jobs yet.
+              </p>
+            ) : (
+              <ul>
+                {jobs.slice(0, 5).map((job) => (
+                  <li key={job.id}>
+                    <Link
+                      href={`/employer/jobs/${job.id}/applicants?title=${encodeURIComponent(job.title)}`}
+                      className="flex items-center gap-4 rounded-xl px-3 py-3 transition-colors hover:bg-[#F5F7F5]"
+                    >
+                      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#E9E4FA] text-sm font-semibold text-[#4B3A8F]">
+                        {job.companyName.charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-[#0B3D2E]">
+                          {job.title}
+                        </p>
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-neutral-500">
+                          {job.companyName}
+                          {job.location && (
+                            <>
+                              <span aria-hidden>·</span>
+                              <MapPin className="size-3" /> {job.location}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EC] px-2.5 py-1 text-xs font-medium text-[#0B3D2E]">
+                        <Users className="size-3.5" />
+                        {applicantCounts[job.id] ?? "–"}
+                      </span>
+                    </Link>
+                  </li>
                 ))}
               </ul>
-            </section>
-          </div>
+            )}
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl bg-[#0B3D2E] p-6 text-white">
+            <div
+              aria-hidden
+              className="absolute inset-0 opacity-20 [background-image:radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px]"
+            />
+            <div className="relative">
+              <p className="text-sm text-white/70">Before you publish</p>
+              <p className="mt-2 text-xl font-semibold">Check the pay twice</p>
+              <p className="mt-4 text-sm leading-relaxed text-white/80">
+                Once someone applies, the pay on that job is locked. You can
+                still edit the description, location and skills, or delete the
+                listing.
+              </p>
+              <Link
+                href="/employer/jobs"
+                className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-[#1DBF73] px-4 py-2 text-sm font-medium text-[#062A1F] hover:brightness-95"
+              >
+                My jobs <ArrowUpRight className="size-4" />
+              </Link>
+            </div>
+          </section>
         </div>
       </div>
     </main>

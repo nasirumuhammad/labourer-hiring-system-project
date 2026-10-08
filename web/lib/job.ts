@@ -3,12 +3,14 @@ import type {
   ApplicationStatus,
   ApplyJobDto,
   CreateJobDto,
+  DashboardSummary,
   Job,
   JobQueryParams,
   JobStatus,
   PaginatedApplications,
   PaginatedJobs,
   PaginatedMyJobs,
+  PaginatedSavedJobs,
 } from "@/types/job";
 import { apiClient } from "./api/api-client";
 
@@ -58,4 +60,22 @@ export const jobsApi = {
     apiClient.update<Application>(`/applications/${applicationId}/status`, {
       status,
     }),
+
+  recommended: (limit = 5) =>
+    apiClient.get<Job[]>(`/jobs/recommended?limit=${limit}`),
+
+  save: (jobId: string) =>
+    apiClient.put<{ saved: true }>(`/jobs/${jobId}/save`),
+
+  unsave: (jobId: string) =>
+    apiClient.delete<{ saved: false }>(`/jobs/${jobId}/save`, undefined),
+
+  savedJobs: (page = 1, limit = 10) =>
+    apiClient.get<PaginatedSavedJobs>(
+      `/saved-jobs?page=${page}&limit=${limit}`,
+    ),
+};
+
+export const dashboardApi = {
+  summary: () => apiClient.get<DashboardSummary>("/dashboard/summary"),
 };

@@ -169,4 +169,19 @@ export class JobService {
       })),
     };
   }
+
+  // Candidate pool for recommendations: newest open jobs, minus anything
+  // the labourer already applied to. Scoring/ranking happens in the
+  // recommendation service — this just narrows the field cheaply in SQL.
+  async findOpenExcluding(excludeIds: string[], take: number): Promise<Job[]> {
+    const qb = this.jobRepository
+      .createQueryBuilder('job')
+      .where('job.status = :status', { status: JobStatus.OPEN });
+
+    if (excludeIds.length > 0) {
+      qb.andWhere('job.id NOT IN (:...excludeIds)', { excludeIds });
+    }
+
+    return qb.orderBy('job.createdAt', 'DESC').take(take).getMany();
+  }
 }

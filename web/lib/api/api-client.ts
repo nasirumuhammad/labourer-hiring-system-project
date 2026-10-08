@@ -102,4 +102,5 @@ export const apiClient = {
   post: <T>(path: string, body: unknown) => request<T>(path, "POST", body),
   delete: <T>(path: string, body: unknown) => request<T>(path, "DELETE", body),
   update: <T>(path: string, body: unknown) => request<T>(path, "PATCH", body),
+  put: <T>(path: string, body: unknown = {}) => request<T>(path, "PUT", body),
 };

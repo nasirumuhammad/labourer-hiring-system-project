@@ -194,4 +194,40 @@ export class ApplicationService {
 
     return merge(statusUpdates$, heartbeat$);
   }
+
+  async findAppliedJobIds(applicantId: string): Promise<Set<string>> {
+    const rows = await this.applicationRepository.find({
+      where: { applicantId },
+      select: { jobId: true },
+    });
+    return new Set(rows.map((row) => row.jobId));
+  }
+
+  async getStatsForApplicant(
+    applicantId: string,
+  ): Promise<Record<ApplicationStatus, number> & { total: number }> {
+    const rows = await this.applicationRepository
+      .createQueryBuilder('application')
+      .select('application.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .where('application.applicantId = :applicantId', { applicantId })
+      .groupBy('application.status')
+      .getRawMany<{ status: ApplicationStatus; count: string }>();
+
+    const stats = {
+      [ApplicationStatus.PENDING]: 0,
+      [ApplicationStatus.ACCEPTED]: 0,
+      [ApplicationStatus.REJECTED]: 0,
+      [ApplicationStatus.WITHDRAWN]: 0,
+      total: 0,
+    };
+
+    for (const row of rows) {
+      const count = Number(row.count);
+      stats[row.status] = count;
+      stats.total += count;
+    }
+
+    return stats;
+  }
 }
