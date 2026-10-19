@@ -25,6 +25,10 @@ COPY . .
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
+# Shared workspace packages export from ./dist, which is not in the image
+# (.dockerignore) - build them first. enums must come before types.
+RUN pnpm --filter @labour-hiring/enums build && pnpm --filter @labour-hiring/types build
+
 RUN pnpm --filter web build
 
 EXPOSE 3000

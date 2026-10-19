@@ -20,6 +20,10 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 
+# Shared workspace packages export from ./dist, which is not in the image
+# (.dockerignore) - build them first. enums must come before types.
+RUN pnpm --filter @labour-hiring/enums build && pnpm --filter @labour-hiring/types build
+
 RUN pnpm --filter api build
 
 EXPOSE 5000
