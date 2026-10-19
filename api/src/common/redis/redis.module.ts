@@ -1,4 +1,4 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Inject, Module, OnModuleDestroy } from '@nestjs/common';
 import { ConfigType } from '@nestjs/config';
 import Redis from 'ioredis';
 import { envConfig } from '../config/env.config';
@@ -20,4 +20,9 @@ export const REDIS_CLIENT = 'REDIS_CLIENT';
   ],
   exports: [REDIS_CLIENT],
 })
-export class RedisModule {}
+export class RedisModule implements OnModuleDestroy {
+  constructor(@Inject(REDIS_CLIENT) private readonly redisClient: Redis) {}
+  async onModuleDestroy() {
+    await this.redisClient.quit();
+  }
+}

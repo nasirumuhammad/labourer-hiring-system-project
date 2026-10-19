@@ -1,8 +1,15 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JobStatus, PaymentType } from '@labour-hiring/enums';
 import { Job } from './entities/job.entity';
+import { Application } from '@/application/entities/application.entity';
+import { UpdateJobDto } from './dto/update-job.dto';
 import { CreateJobDto } from './dto/create-job.dto';
 import { QueryJobsDto } from './dto/query-jobs.dto';
 import { QueryMyJobsDto } from './dto/query-my-job.dto';
@@ -38,6 +45,8 @@ export class JobService {
 
   constructor(
     @InjectRepository(Job) private readonly jobRepository: Repository<Job>,
+    @InjectRepository(Application)
+    private readonly applicationRepository: Repository<Application>,
   ) {}
 
   async create(employerId: string, dto: CreateJobDto): Promise<Job> {
@@ -47,6 +56,64 @@ export class JobService {
     this.logger.debug({ jobId: saved.id, employerId }, 'job posted');
 
     return saved;
+  }
+
+  // One of the employer's own jobs (any status), plus how many people have
+  // applied so the edit screen can lock the pay fields.
+  async findMineOne(
+    id: string,
+    employerId: string,
+  ): Promise<Job & { applicantCount: number }> {
+    const job = await this.findOwned(id, employerId);
+    const applicantCount = await this.applicationRepository.count({
+      where: { jobId: id },
+    });
+    return Object.assign(job, { applicantCount });
+  }
+
+  // Pay is locked as soon as anyone has applied, so an applicant never
+  // applies to one price and finds it changed afterwards.
+  async update(
+    id: string,
+    employerId: string,
+    dto: UpdateJobDto,
+  ): Promise<Job> {
+    const job = await this.findOwned(id, employerId);
+
+    const payChanged =
+      (dto.minPay !== undefined && Number(dto.minPay) !== Number(job.minPay)) ||
+      (dto.maxPay !== undefined && Number(dto.maxPay) !== Number(job.maxPay)) ||
+      (dto.paymentType !== undefined && dto.paymentType !== job.paymentType);
+
+    if (payChanged) {
+      const applicants = await this.applicationRepository.count({
+        where: { jobId: id },
+      });
+      if (applicants > 0) {
+        throw new ConflictException(
+          'The pay for this job cannot be changed because people have already applied',
+        );
+      }
+    }
+
+    Object.assign(job, dto);
+
+    if (Number(job.maxPay) < Number(job.minPay)) {
+      throw new ConflictException(
+        'Maximum pay must be at least the minimum pay',
+      );
+    }
+
+    const saved = await this.jobRepository.save(job);
+    this.logger.debug({ jobId: id, employerId }, 'job updated');
+    return saved;
+  }
+
+  async remove(id: string, employerId: string): Promise<{ id: string }> {
+    const job = await this.findOwned(id, employerId);
+    await this.jobRepository.softRemove(job);
+    this.logger.debug({ jobId: id, employerId }, 'job deleted');
+    return { id };
   }
 
   async count(): Promise<number> {
@@ -171,7 +238,7 @@ export class JobService {
   }
 
   // Candidate pool for recommendations: newest open jobs, minus anything
-  // the labourer already applied to. Scoring/ranking happens in the
+  // the client already applied to. Scoring/ranking happens in the
   // recommendation service — this just narrows the field cheaply in SQL.
   async findOpenExcluding(excludeIds: string[], take: number): Promise<Job[]> {
     const qb = this.jobRepository

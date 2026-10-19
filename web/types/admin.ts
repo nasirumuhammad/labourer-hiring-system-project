@@ -69,7 +69,7 @@ export interface Paginated<T> {
 export interface Dashboard {
   users: {
     total: number;
-    labourers: number;
+    clients: number;
     employers: number;
     admins: number;
     active: number;

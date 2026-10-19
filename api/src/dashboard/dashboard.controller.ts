@@ -9,7 +9,7 @@ import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.LABOURER)
+@Roles(UserRole.CLIENT)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 

@@ -30,7 +30,7 @@ export class ApplicationController {
   constructor(private readonly applicationService: ApplicationService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.LABOURER)
+  @Roles(UserRole.CLIENT)
   @Post('jobs/:id/apply')
   apply(
     @Param('id', ParseUUIDPipe) jobId: string,
@@ -48,7 +48,7 @@ export class ApplicationController {
 
   @SkipResponseTransform()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.LABOURER)
+  @Roles(UserRole.CLIENT)
   @Sse('applications/stream')
   stream(@CurrentUser() user: Payload): Observable<MessageEvent> {
     return this.applicationService.streamStatusUpdates(user.sub);

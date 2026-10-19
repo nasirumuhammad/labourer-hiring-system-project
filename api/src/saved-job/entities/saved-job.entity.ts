@@ -11,7 +11,7 @@ import {
 import { User } from '@/user/entities/user.entity';
 import { Job } from '@/job/entities/job.entity';
 
-// Unique only among live rows, so a labourer can save, unsave (soft delete)
+// Unique only among live rows, so a client can save, unsave (soft delete)
 // and save the same job again without tripping the constraint.
 @Entity()
 @Index(['userId', 'jobId'], { unique: true, where: '"deletedAt" IS NULL' })

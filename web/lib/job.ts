@@ -7,10 +7,12 @@ import type {
   Job,
   JobQueryParams,
   JobStatus,
+  MyJob,
   PaginatedApplications,
   PaginatedJobs,
   PaginatedMyJobs,
   PaginatedSavedJobs,
+  UpdateJobDto,
 } from "@/types/job";
 import { apiClient } from "./api/api-client";
 
@@ -43,6 +45,13 @@ export const jobsApi = {
     ),
 
   create: (payload: CreateJobDto) => apiClient.post<Job>("/jobs", payload),
+
+  update: (id: string, payload: UpdateJobDto) =>
+    apiClient.update<Job>(`/jobs/${id}`, payload),
+
+  remove: (id: string) => apiClient.delete<{ id: string }>(`/jobs/${id}`, undefined),
+
+  mineOne: (id: string) => apiClient.get<MyJob>(`/jobs/mine/${id}`),
 
   mine: (page = 1, limit = 10, status?: JobStatus) =>
     apiClient.get<PaginatedMyJobs>(

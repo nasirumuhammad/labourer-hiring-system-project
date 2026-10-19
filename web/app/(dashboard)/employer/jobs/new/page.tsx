@@ -1,36 +1,26 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import type { Metadata } from "next";
+import { RequireRole } from "@/components/auth/require-role";
+import { PageContainer, PageHeader, Panel } from "@/components/layout/page";
 import { PostJobForm } from "@/components/jobs/post-job-form";
-import { useCurrentUser } from "@/hooks/use-current-user";
+
+export const metadata: Metadata = {
+  title: "Post a job",
+  description: "Create a new listing with pay, skills and location. It goes live as soon as you post it.",
+};
 
 export default function NewJobPage() {
-  const router = useRouter();
-  const { user, isLoading } = useCurrentUser();
-
-  useEffect(() => {
-    if (!isLoading && user && user.role !== "employer") {
-      router.replace("/dashboard");
-    }
-  }, [isLoading, user, router]);
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-4">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
-      <h1 className="text-2xl font-bold">Post a Job</h1>
-      <p className="text-sm text-muted-foreground">
-        Fill in the details below. Your listing goes live as soon as you post
-        it.
-      </p>
-      <PostJobForm />
-    </div>
+    <RequireRole role="employer">
+      <PageContainer width="3xl">
+        <PageHeader
+          eyebrow="Employer"
+          title="Post a job"
+          description="Fill in the details below. Your listing goes live as soon as you post it. Pay is locked once someone applies."
+        />
+        <Panel className="p-5 sm:p-6">
+          <PostJobForm />
+        </Panel>
+      </PageContainer>
+    </RequireRole>
   );
 }

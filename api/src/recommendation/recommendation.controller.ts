@@ -18,7 +18,7 @@ const MAX_LIMIT = 20;
 
 @Controller('jobs/recommended')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.LABOURER)
+@Roles(UserRole.CLIENT)
 export class RecommendationController {
   constructor(private readonly recommendationService: RecommendationService) {}
 

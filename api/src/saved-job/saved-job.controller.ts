@@ -19,7 +19,7 @@ import { PaginationQueryDto } from '@/common/dto/pagination-query.dto';
 
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.LABOURER)
+@Roles(UserRole.CLIENT)
 export class SavedJobController {
   constructor(private readonly savedJobService: SavedJobService) {}
 

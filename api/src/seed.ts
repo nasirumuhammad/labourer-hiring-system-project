@@ -23,7 +23,9 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch((error) => {
-  console.error('Seeding failed:', error);
-  process.exit(1);
-});
+bootstrap()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('Seeding failed:', error);
+    process.exit(1);
+  });

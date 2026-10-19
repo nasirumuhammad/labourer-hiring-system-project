@@ -118,7 +118,7 @@ function Toolbar() {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-input p-1">
+    <div className="flex flex-wrap items-center gap-1 border-b border-input bg-background p-1.5">
       <Toggle
         size="sm"
         onPressedChange={() => formatHeading("h1")}
@@ -210,8 +210,8 @@ export function RichTextEditor({
     <LexicalComposer initialConfig={initialConfig}>
       <div
         className={cn(
-          "rounded-md border border-input bg-transparent shadow-sm",
-          "focus-within:ring-1 focus-within:ring-ring",
+          "overflow-hidden rounded-xl border border-input bg-card",
+          "focus-within:border-primary focus-within:ring-3 focus-within:ring-primary/25",
           className,
         )}
       >
@@ -221,10 +221,10 @@ export function RichTextEditor({
           <RichTextPlugin
             contentEditable={
               <ContentEditable
-                className="prose prose-sm min-h-40 max-w-none px-3 py-2 focus:outline-none"
+                className="rich-text min-h-40 max-w-none px-3.5 py-3 focus:outline-none"
                 aria-placeholder={placeholder}
                 placeholder={
-                  <div className="pointer-events-none absolute inset-0 px-3 py-2 text-muted-foreground">
+                  <div className="pointer-events-none absolute inset-0 px-3.5 py-3 text-sm text-neutral-400">
                     {placeholder}
                   </div>
                 }

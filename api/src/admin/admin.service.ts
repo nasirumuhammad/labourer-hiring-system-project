@@ -26,10 +26,10 @@ export class AdminService {
   ) {}
 
   async dashboard() {
-    const [activeUsers, labourers, employers, admins, deactivated] =
+    const [activeUsers, clients, employers, admins, deactivated] =
       await Promise.all([
         this.users.count(),
-        this.users.count({ where: { role: UserRole.LABOURER } }),
+        this.users.count({ where: { role: UserRole.CLIENT } }),
         this.users.count({ where: { role: UserRole.EMPLOYER } }),
         this.users.count({ where: { role: UserRole.ADMIN } }),
         this.users
@@ -78,7 +78,7 @@ export class AdminService {
     return {
       users: {
         total: activeUsers + deactivated,
-        labourers,
+        clients,
         employers,
         admins,
         active: activeUsers,
@@ -134,7 +134,7 @@ export class AdminService {
           })
         : [];
     const applications =
-      user.role === UserRole.LABOURER
+      user.role === UserRole.CLIENT
         ? await this.applications.find({
             where: { applicantId: id },
             withDeleted: true,

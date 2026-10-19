@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
 import { authApi } from "@/lib/api/auth";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { applyFieldError } from "@/lib/apply-field-error";
 import { ApiError } from "@/lib/api/api-error";
 import { toast } from "sonner";
@@ -30,7 +30,7 @@ const signinSchema = z.object({
 
 export type SigninValues = z.infer<typeof signinSchema>;
 
-export function SigninForm() {
+export function SigninForm({ notice }: { notice?: string }) {
   const router = useRouter();
   useEffect(() => {
     router.prefetch("/dashboard");
@@ -62,12 +62,17 @@ export function SigninForm() {
   };
   const busy = isBusy(isSubmitting);
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Welcome back</CardTitle>
+        <CardTitle className="text-2xl">Welcome back</CardTitle>
         <CardDescription>Sign in to your account</CardDescription>
       </CardHeader>
       <CardContent>
+        {notice && (
+          <p role="status" className="mb-4 rounded-xl bg-brand-soft px-4 py-3 text-sm text-brand">
+            {notice}
+          </p>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Controller
             name="email"
@@ -105,7 +110,7 @@ export function SigninForm() {
       <CardFooter className="flex flex-col gap-2">
         <div className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-primary hover:underline">
+          <Link href="/signup" className="font-medium text-link hover:underline">
             Sign up
           </Link>
         </div>

@@ -27,7 +27,7 @@ import { cn } from "cn";
 const signupSchema = z.object({
   email: z.string().email("Invalid email"),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  role: z.enum(["labourer", "employer"]),
+  role: z.enum(["client", "employer"]),
 });
 
 export type SignupValues = z.infer<typeof signupSchema>;
@@ -38,9 +38,9 @@ const ROLE_OPTIONS: {
   description: string;
 }[] = [
   {
-    value: "labourer",
-    label: "I'm looking for work",
-    description: "Browse jobs and apply",
+    value: "client",
+    label: "I'm a client",
+    description: "Browse jobs and apply for work",
   },
   {
     value: "employer",
@@ -61,7 +61,7 @@ export function SignupForm() {
     setError,
   } = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: "", password: "", role: "labourer" },
+    defaultValues: { email: "", password: "", role: "client" },
   });
 
   const { isBusy, markRedirecting } = useFormSubmission();
@@ -80,10 +80,10 @@ export function SignupForm() {
   };
   const busy = isBusy(isSubmitting);
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Create an account</CardTitle>
-        <CardDescription>Enter your email and password</CardDescription>
+        <CardTitle className="text-2xl">Create an account</CardTitle>
+        <CardDescription>Choose how you will use JobLink to get started.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -93,7 +93,7 @@ export function SignupForm() {
             render={({ field }) => (
               <Field>
                 <FieldLabel>I want to...</FieldLabel>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   {ROLE_OPTIONS.map((option) => (
                     <button
                       key={option.value}
@@ -101,16 +101,16 @@ export function SignupForm() {
                       onClick={() => field.onChange(option.value)}
                       aria-pressed={field.value === option.value}
                       className={cn(
-                        "flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors",
+                        "flex flex-col items-start gap-0.5 rounded-xl border px-3 py-3 text-left transition-colors",
                         field.value === option.value
-                          ? "border-primary bg-primary/5"
-                          : "border-input hover:bg-muted/50",
+                          ? "border-primary bg-brand-soft"
+                          : "border-input bg-card hover:bg-brand-soft/50",
                       )}
                     >
                       <span className="text-sm font-medium">
                         {option.label}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-neutral-500">
                         {option.description}
                       </span>
                     </button>
@@ -156,7 +156,7 @@ export function SignupForm() {
       <CardFooter>
         <div className="text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/signin" className="text-primary hover:underline">
+          <Link href="/signin" className="font-medium text-link hover:underline">
             Sign in
           </Link>
         </div>

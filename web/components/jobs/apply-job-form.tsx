@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { ErrorNote } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { applyFieldError } from "@/lib/apply-field-error";
@@ -84,9 +85,9 @@ export function ApplyJobForm({ jobId }: { jobId: string }) {
         {errors.proposal && <FieldError>{errors.proposal.message}</FieldError>}
       </Field>
 
-      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+      {submitError && <ErrorNote message={submitError} />}
 
-      <Button type="submit" disabled={isLoading}>
+      <Button type="submit" size="lg" disabled={isLoading}>
         {isLoading ? "Submitting..." : "Submit Application"}
       </Button>
     </form>

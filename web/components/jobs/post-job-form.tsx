@@ -6,13 +6,16 @@ import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ErrorNote } from "@/components/layout/page";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldLabel, FieldError } from "@/components/ui/field";
 import { applyFieldError } from "@/lib/apply-field-error";
 import { ApiError } from "@/lib/api/api-error";
 import { jobsApi } from "@/lib/job";
-import type { CreateJobDto, PaymentType } from "@/types/job";
+import type { CreateJobDto, Job, PaymentType } from "@/types/job";
 import { cn } from "cn";
+import { toast } from "sonner";
 
 const NUMERIC_PATTERN = /^\d+(\.\d{1,2})?$/;
 
@@ -56,8 +59,16 @@ const PAYMENT_TYPE_OPTIONS: { value: PaymentType; label: string }[] = [
   { value: "hourly", label: "Hourly rate" },
 ];
 
-export function PostJobForm() {
+export function PostJobForm({
+  job,
+  priceLocked = false,
+}: {
+  job?: Job;
+  /** True once someone has applied: the pay fields can no longer change. */
+  priceLocked?: boolean;
+}) {
   const router = useRouter();
+  const isEdit = !!job;
   const {
     control,
     handleSubmit,
@@ -66,15 +77,15 @@ export function PostJobForm() {
   } = useForm<PostJobValues>({
     resolver: zodResolver(postJobSchema),
     defaultValues: {
-      title: "",
-      companyName: "",
-      description: "",
-      location: "",
-      paymentType: "fixed",
-      minPay: "",
-      maxPay: "",
-      minExperienceYears: "",
-      skills: "",
+      title: job?.title ?? "",
+      companyName: job?.companyName ?? "",
+      description: job?.description ?? "",
+      location: job?.location ?? "",
+      paymentType: job?.paymentType ?? "fixed",
+      minPay: job ? String(Number(job.minPay)) : "",
+      maxPay: job ? String(Number(job.maxPay)) : "",
+      minExperienceYears: job?.minExperienceYears ? String(job.minExperienceYears) : "",
+      skills: job?.skills.join(", ") ?? "",
     },
   });
 
@@ -105,8 +116,19 @@ export function PostJobForm() {
           : undefined,
       };
 
-      await jobsApi.create(payload);
+      if (job) {
+        // Never send pay fields once the job has applicants; the API rejects them.
+        const { minPay, maxPay, paymentType, ...rest } = payload;
+        void minPay;
+        void maxPay;
+        void paymentType;
+        await jobsApi.update(job.id, priceLocked ? rest : payload);
+        toast.success("Job updated");
+      } else {
+        await jobsApi.create(payload);
+      }
       router.push("/employer/jobs");
+      router.refresh();
     } catch (error) {
       if (error instanceof ApiError) {
         const handledFieldError = applyFieldError(error, setError);
@@ -117,7 +139,7 @@ export function PostJobForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
       <Controller
         name="title"
         control={control}
@@ -150,14 +172,7 @@ export function PostJobForm() {
         render={({ field }) => (
           <Field data-invalid={!!errors.description}>
             <FieldLabel>Description</FieldLabel>
-            <textarea
-              rows={5}
-              placeholder="What will this person be doing day to day?"
-              className={cn(
-                "w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30",
-              )}
-              {...field}
-            />
+            <Textarea rows={5} placeholder="What will this person be doing day to day?" {...field} />
             {errors.description && (
               <FieldError>{errors.description.message}</FieldError>
             )}
@@ -185,18 +200,19 @@ export function PostJobForm() {
         render={({ field }) => (
           <Field>
             <FieldLabel>Payment type</FieldLabel>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {PAYMENT_TYPE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
+                  disabled={priceLocked}
                   onClick={() => field.onChange(option.value)}
                   aria-pressed={field.value === option.value}
                   className={cn(
-                    "rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                    "rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                     field.value === option.value
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-input hover:bg-muted/50",
+                      ? "border-primary bg-brand-soft text-brand"
+                      : "border-input bg-card hover:bg-brand-soft/50",
                   )}
                 >
                   {option.label}
@@ -207,14 +223,14 @@ export function PostJobForm() {
         )}
       />
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-5 sm:grid-cols-2">
         <Controller
           name="minPay"
           control={control}
           render={({ field }) => (
             <Field data-invalid={!!errors.minPay}>
               <FieldLabel>Minimum pay</FieldLabel>
-              <Input inputMode="decimal" placeholder="e.g. 5000" {...field} />
+              <Input inputMode="decimal" placeholder="e.g. 5000" disabled={priceLocked} {...field} />
               {errors.minPay && (
                 <FieldError>{errors.minPay.message}</FieldError>
               )}
@@ -228,7 +244,7 @@ export function PostJobForm() {
           render={({ field }) => (
             <Field data-invalid={!!errors.maxPay}>
               <FieldLabel>Maximum pay</FieldLabel>
-              <Input inputMode="decimal" placeholder="e.g. 8000" {...field} />
+              <Input inputMode="decimal" placeholder="e.g. 8000" disabled={priceLocked} {...field} />
               {errors.maxPay && (
                 <FieldError>{errors.maxPay.message}</FieldError>
               )}
@@ -263,11 +279,24 @@ export function PostJobForm() {
         )}
       />
 
-      {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+      {submitError && <ErrorNote message={submitError} />}
 
-      <Button type="submit" disabled={isLoading}>
-        {isLoading ? "Posting..." : "Post Job"}
-      </Button>
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        {isEdit && (
+          <Button type="button" variant="outline" onClick={() => router.push("/employer/jobs")}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" size="lg" disabled={isLoading}>
+          {isLoading
+            ? isEdit
+              ? "Saving..."
+              : "Posting..."
+            : isEdit
+              ? "Save changes"
+              : "Post job"}
+        </Button>
+      </div>
     </form>
   );
 }

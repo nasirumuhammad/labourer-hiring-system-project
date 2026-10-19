@@ -1,16 +1,24 @@
+import type { Metadata } from "next";
 import { AdminUserListPage } from "@/components/admin/admin-list-page";
+import { ErrorNote } from "@/components/layout/page";
 import { adminApi } from "@/lib/admin";
 import { ApiError } from "@/lib/api/api-error";
 
+export const metadata: Metadata = {
+  title: "Users",
+  description: "Search and manage every account on the platform.",
+};
+
+const getData = () => adminApi.users();
+
 export default async function UsersPage() {
+  let result: Awaited<ReturnType<typeof getData>> | undefined;
+  let message: string | null = null;
   try {
-    const response = await adminApi.users();
-    return (
-      <AdminUserListPage title="All Users" users={response?.data?.data ?? []} />
-    );
+    result = await getData();
   } catch (error) {
-    const message =
-      error instanceof ApiError ? error.message : "Failed to load users";
-    return <p className="text-sm text-destructive">{message}</p>;
+    message = error instanceof ApiError ? error.message : "Failed to load users";
   }
+  if (!result) return <ErrorNote message={message ?? "Failed to load users"} />;
+  return <AdminUserListPage title="All users" users={result.data?.data ?? []} />;
 }

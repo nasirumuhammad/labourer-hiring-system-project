@@ -1,25 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
+import { ArrowLeft } from "lucide-react";
+import {
+  EmptyState,
+  ErrorNote,
+  InitialTile,
+  LoadingNote,
+  PageContainer,
+  PageHeader,
+  Panel,
+} from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
+import { ApplicationStatusPill } from "@/components/ui/status-pill";
 import { ApiError } from "@/lib/api/api-error";
-import type { Application, ApplicationStatus } from "@/types/job";
+import type { Application } from "@/types/job";
 import { jobsApi } from "@/lib/job";
-import { useCurrentUser } from "@/hooks/use-current-user";
 
-const STATUS_VARIANT: Record<
-  ApplicationStatus,
-  "default" | "secondary" | "success" | "outline"
-> = {
-  pending: "secondary",
-  accepted: "success",
-  rejected: "outline",
-  withdrawn: "outline",
-};
+const PAGE_SIZE = 10;
 
 export function JobApplicantsList({
   jobId,
@@ -28,48 +27,37 @@ export function JobApplicantsList({
   jobId: string;
   jobTitle?: string;
 }) {
-  const router = useRouter();
-  const { user, isLoading: isLoadingUser } = useCurrentUser();
   const [applications, setApplications] = useState<Application[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [decidingId, setDecidingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoadingUser && user && user.role !== "employer") {
-      router.replace("/dashboard");
-    }
-  }, [isLoadingUser, user, router]);
-
-  useEffect(() => {
     async function fetchApplicants() {
       try {
         setIsLoading(true);
-        const response = await jobsApi.applicantsForJob(jobId);
-        setApplications(response?.data?.data ?? []);
+        const response = await jobsApi.applicantsForJob(jobId, page, PAGE_SIZE);
+        const next = response?.data?.data ?? [];
+        setApplications((current) => (page === 1 ? next : [...current, ...next]));
+        setTotal(response?.data?.total ?? 0);
       } catch (err) {
         setError(
-          err instanceof ApiError
-            ? err.message
-            : "Failed to load applicants for this job",
+          err instanceof ApiError ? err.message : "Failed to load applicants for this job",
         );
       } finally {
         setIsLoading(false);
       }
     }
     fetchApplicants();
-  }, [jobId]);
+  }, [jobId, page]);
 
-  const decide = async (
-    applicationId: string,
-    status: "accepted" | "rejected",
-  ) => {
+  const decide = async (applicationId: string, status: "accepted" | "rejected") => {
     try {
       setDecidingId(applicationId);
-      const response = await jobsApi.updateApplicationStatus(
-        applicationId,
-        status,
-      );
+      setError(null);
+      const response = await jobsApi.updateApplicationStatus(applicationId, status);
       const updated = response?.data;
       if (updated) {
         setApplications((current) =>
@@ -81,86 +69,98 @@ export function JobApplicantsList({
         );
       }
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Failed to update this application",
-      );
+      setError(err instanceof ApiError ? err.message : "Failed to update this application");
     } finally {
       setDecidingId(null);
     }
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4">
-      <div>
-        <Link
-          href="/employer/jobs"
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          ← Back to My Jobs
-        </Link>
-        <h1 className="text-2xl font-bold">
-          Applicants{jobTitle ? ` for ${jobTitle}` : ""}
-        </h1>
+    <PageContainer width="4xl">
+      <Link
+        href="/employer/jobs"
+        className="inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-brand"
+      >
+        <ArrowLeft className="size-4" /> Back to my jobs
+      </Link>
+      <PageHeader
+        eyebrow={total > 0 ? `${total} applicant${total === 1 ? "" : "s"}` : "Applicants"}
+        title={jobTitle ? `Applicants for ${jobTitle}` : "Applicants"}
+      />
+
+      {error && <ErrorNote message={error} />}
+
+      {isLoading && applications.length === 0 && <LoadingNote />}
+      {!isLoading && !error && applications.length === 0 && (
+        <Panel>
+          <EmptyState message="No one has applied to this job yet." />
+        </Panel>
+      )}
+
+      <div className="space-y-4">
+        {applications.map((application) => (
+          <Panel key={application.id} className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <InitialTile text={application.applicant?.email ?? "A"} />
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-brand">
+                    {application.applicant?.email ?? "Applicant"}
+                  </p>
+                  <p className="text-xs text-neutral-500">
+                    Applied {new Date(application.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <ApplicationStatusPill status={application.status} />
+                {application.status === "pending" && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={decidingId === application.id}
+                      onClick={() => decide(application.id, "rejected")}
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={decidingId === application.id}
+                      onClick={() => decide(application.id, "accepted")}
+                    >
+                      Accept
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-background p-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                Proposal
+              </p>
+              {/* Sanitized server-side (sanitize-html) before it is stored. */}
+              <div
+                className="rich-text"
+                dangerouslySetInnerHTML={{ __html: application.proposal }}
+              />
+            </div>
+          </Panel>
+        ))}
       </div>
 
-      {(isLoading || isLoadingUser) && (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+      {applications.length < total && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            disabled={isLoading}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            {isLoading ? "Loading..." : "Load more"}
+          </Button>
+        </div>
       )}
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {!isLoading && !error && applications.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          No one has applied to this job yet.
-        </p>
-      )}
-
-      {applications.map((application) => (
-        <Card key={application.id} className="flex flex-col gap-4 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">
-                {application.applicant?.email ?? "Applicant"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Applied {new Date(application.createdAt).toLocaleDateString()}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={STATUS_VARIANT[application.status]}>
-                {application.status}
-              </Badge>
-              {application.status === "pending" && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={decidingId === application.id}
-                    onClick={() => decide(application.id, "rejected")}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={decidingId === application.id}
-                    onClick={() => decide(application.id, "accepted")}
-                  >
-                    Accept
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Proposal</p>
-            <div
-              className="prose prose-sm max-w-none text-muted-foreground"
-              dangerouslySetInnerHTML={{ __html: application.proposal }}
-            />
-          </div>
-        </Card>
-      ))}
-    </div>
+    </PageContainer>
   );
 }

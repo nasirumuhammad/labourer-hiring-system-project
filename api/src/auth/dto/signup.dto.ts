@@ -7,7 +7,7 @@ import {
 } from 'class-validator';
 import { UserRole } from '@labour-hiring/enums';
 
-const SELF_SERVE_ROLES = [UserRole.LABOURER, UserRole.EMPLOYER] as const;
+const SELF_SERVE_ROLES = [UserRole.CLIENT, UserRole.EMPLOYER] as const;
 
 export class SignUpDto {
   @IsEmail()
@@ -19,5 +19,5 @@ export class SignUpDto {
 
   @IsOptional()
   @IsIn(SELF_SERVE_ROLES)
-  role: UserRole.LABOURER | UserRole.EMPLOYER = UserRole.LABOURER;
+  role: UserRole.CLIENT | UserRole.EMPLOYER = UserRole.CLIENT;
 }

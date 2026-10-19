@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Job } from './entities/job.entity';
+import { Application } from '@/application/entities/application.entity';
 import { JobService } from './job.service';
 import { JobController } from './job.controller';
 import { JobSeeder } from './seeders/job.seeder';
 import { UserModule } from '@/user/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Job]), UserModule],
+  imports: [TypeOrmModule.forFeature([Job, Application]), UserModule],
   controllers: [JobController],
   providers: [JobService, JobSeeder],
   exports: [JobService],

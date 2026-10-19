@@ -49,8 +49,8 @@ export class AdminController {
     return this.adminService.setUserStatus(id, true, actor.sub);
   }
 
-  @Get('labourers') labourers(@Query() query: QueryUsersDto) {
-    query.role = UserRole.LABOURER;
+  @Get('clients') clients(@Query() query: QueryUsersDto) {
+    query.role = UserRole.CLIENT;
     return this.adminService.listUsers(query);
   }
   @Get('employers') employers(@Query() query: QueryUsersDto) {

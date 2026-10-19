@@ -169,7 +169,7 @@ export class ApplicationService {
   // Live status updates for the applicant's own "My Applications" view.
   // Filtered to this applicant's own events only — every connected client
   // shares the same underlying emitter, so without this filter one
-  // labourer would see every other labourer's status changes too.
+  // client would see every other client's status changes too.
   //
   // A periodic ping keeps the connection alive through proxies/load
   // balancers that would otherwise time out an idle stream.

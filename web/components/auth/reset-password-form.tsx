@@ -72,9 +72,9 @@ export function ResetPasswordForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Set new password</CardTitle>
+        <CardTitle className="text-2xl">Set new password</CardTitle>
         <CardDescription>Create a new password for {email}</CardDescription>
       </CardHeader>
       <CardContent>

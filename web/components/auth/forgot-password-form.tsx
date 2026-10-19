@@ -57,9 +57,9 @@ export function ForgotPasswordForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Reset password</CardTitle>
+        <CardTitle className="text-2xl">Reset password</CardTitle>
         <CardDescription>
           Enter your email and we&apos;ll send you a verification code.
         </CardDescription>

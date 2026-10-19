@@ -14,13 +14,19 @@ services:
       NODE_ENV: production
       API_URL: http://api:5000
     depends_on:
-      - api
+      api:
+        condition: service_started
+      seed:
+        condition: service_completed_successfully
 
   api:
     build:
       context: .
       dockerfile: api/Dockerfile
       network: host
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports:
       - "5000:5000"
     env_file:
@@ -30,8 +36,32 @@ services:
       DB_HOST: postgres
       REDIS_HOST: redis
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  seed:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      network: host
+    env_file:
+      - ./api/.env
+
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      REDIS_HOST: redis
+    command: ["pnpm", "seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      api:
+        condition: service_started
+    restart: "no"
 
   postgres:
     image: postgres:17-alpine

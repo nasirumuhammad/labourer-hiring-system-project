@@ -111,3 +111,8 @@ export interface DashboardSummary {
   recentApplications: Application[];
   recommendedJobs: (Job & { isSaved: boolean })[];
 }
+
+export type UpdateJobDto = Partial<CreateJobDto>;
+
+/** One of the employer's own jobs, with how many people have applied. */
+export type MyJob = Job & { applicantCount: number };

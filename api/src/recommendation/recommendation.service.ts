@@ -23,15 +23,15 @@ export class RecommendationService {
     private readonly applicationService: ApplicationService,
   ) {}
 
-  async getRecommendedJobs(labourerId: string, limit: number): Promise<Job[]> {
+  async getRecommendedJobs(clientId: string, limit: number): Promise<Job[]> {
     const appliedJobIds =
-      await this.applicationService.findAppliedJobIds(labourerId);
+      await this.applicationService.findAppliedJobIds(clientId);
     const candidates = await this.jobService.findOpenExcluding(
       [...appliedJobIds],
       CANDIDATE_POOL_SIZE,
     );
 
-    const user = await this.userService.findById(labourerId);
+    const user = await this.userService.findById(clientId);
     const profile = user?.profile;
 
     // No profile yet (or nothing to match on): freshest open jobs stand in
@@ -48,7 +48,7 @@ export class RecommendationService {
     scored.sort((a, b) => b.score - a.score);
 
     this.logger.debug(
-      { labourerId, candidateCount: candidates.length },
+      { clientId, candidateCount: candidates.length },
       'recommendations scored',
     );
 

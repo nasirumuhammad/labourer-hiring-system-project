@@ -19,12 +19,12 @@ const AUTH_ROUTES = [
   "/signup",
   "/forgot-password",
   "/otp",
-  "/reset-password",
+  "/reset",
 ];
 const ADMIN_ROUTE = "/admin";
 const DASHBOARD_ROUTE = "/dashboard";
-const EMPLOYEE_ROUTE = "/employee";
-const APPLICATIONS_ROUTE = "/dashboard/applications";
+const EMPLOYER_ROUTE = "/employer";
+const APPLICATIONS_ROUTE = "/applications";
 const SIGNIN_ROUTE = "/signin";
 
 interface SessionPayload {
@@ -88,7 +88,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   }
 
   if (
-    matchesRoute(pathname, EMPLOYEE_ROUTE) &&
+    matchesRoute(pathname, EMPLOYER_ROUTE) &&
     session.role !== UserRole.EMPLOYER
   ) {
     return redirectTo(request, DASHBOARD_ROUTE);
@@ -96,7 +96,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   if (
     matchesRoute(pathname, APPLICATIONS_ROUTE) &&
-    session.role !== UserRole.LABOURER
+    session.role !== UserRole.CLIENT
   ) {
     return redirectTo(request, DASHBOARD_ROUTE);
   }
@@ -111,9 +111,12 @@ export const config = {
     "/signup/:path*",
     "/forgot-password/:path*",
     "/otp/:path*",
-    "/reset-password/:path*",
+    "/reset/:path*",
     "/admin/:path*",
     "/dashboard/:path*",
-    "/employee/:path*",
+    "/employer/:path*",
+    "/applications/:path*",
+    "/jobs/:path*",
+    "/profile/:path*",
   ],
 };

@@ -88,16 +88,16 @@ export function OtpForm() {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Verify your email</CardTitle>
+        <CardTitle className="text-2xl">Verify your email</CardTitle>
         <CardDescription>
           Enter the 6‑digit code sent to <strong>{email}</strong>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Field data-invalid={!!error}>
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-2" role="group" aria-label="One-time code">
             {otp.map((digit, index) => (
               <input
                 key={index}
@@ -110,7 +110,7 @@ export function OtpForm() {
                 value={digit}
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
-                className="w-12 h-14 text-center text-2xl font-semibold border rounded-lg focus:ring-2 focus:ring-primary outline-none bg-background"
+                className="h-12 min-w-0 max-w-12 flex-1 rounded-xl border border-input bg-card text-center text-xl font-semibold text-brand outline-none focus:border-primary focus:ring-3 focus:ring-primary/25 sm:h-14 sm:text-2xl"
                 aria-invalid={!!error}
               />
             ))}

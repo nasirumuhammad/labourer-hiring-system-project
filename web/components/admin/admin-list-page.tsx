@@ -1,13 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
+import { UserRole } from "@labour-hiring/enums";
+import { AdminHeading, DataTable, FilterBar, cell, selectClass } from "@/components/admin/admin-ui";
+import { EmptyState, ErrorNote, LoadingNote, Panel } from "@/components/layout/page";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { adminApi } from "@/lib/admin";
 import { ApiError } from "@/lib/api/api-error";
-import { UserRole } from "@labour-hiring/enums";
-import Link from "next/link";
-import { AdminUser } from "@/types/admin";
+import type { AdminUser } from "@/types/admin";
+
+const nameOf = (user: AdminUser) =>
+  user.profile ? `${user.profile.firstName} ${user.profile.lastName}` : "—";
+
+function StatusBadge({ user }: { user: AdminUser }) {
+  return user.deletedAt ? (
+    <Badge variant="outline">Deactivated</Badge>
+  ) : (
+    <Badge variant="success">Active</Badge>
+  );
+}
 
 export function AdminUserListPage({
   role,
@@ -18,15 +32,12 @@ export function AdminUserListPage({
   title: string;
   users: AdminUser[];
 }) {
-  const [users, setUsers] = useState<AdminUser[]>(initialUsers);
+  const [override, setUsers] = useState<AdminUser[] | null>(null);
+  const users = override ?? initialUsers;
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"active" | "deactivated" | "">("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setUsers(initialUsers);
-  }, [initialUsers]);
 
   const load = async () => {
     setLoading(true);
@@ -48,74 +59,94 @@ export function AdminUserListPage({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage platform accounts.
-        </p>
-      </div>
-      <div className="flex gap-2">
-        <Input
-          placeholder="Search by name or email"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          className="h-9 rounded-lg border bg-background px-3 text-sm"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as typeof status)}
-        >
-          <option value="">All status</option>
-          <option value="active">Active</option>
-          <option value="deactivated">Deactivated</option>
-        </select>
-        <Button onClick={() => void load()}>Search</Button>
-      </div>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="p-3 text-left">Name</th>
-                <th className="p-3 text-left">Email</th>
-                <th className="p-3 text-left">Role</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Created</th>
-                <th />
+      <AdminHeading title={title} description="Manage platform accounts." />
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load();
+        }}
+      >
+        <FilterBar>
+          <Input
+            aria-label="Search by name or email"
+            placeholder="Search by name or email"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            aria-label="Filter by status"
+            className={selectClass}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as typeof status)}
+          >
+            <option value="">All status</option>
+            <option value="active">Active</option>
+            <option value="deactivated">Deactivated</option>
+          </select>
+          <Button type="submit" className="h-11">
+            Search
+          </Button>
+        </FilterBar>
+      </form>
+
+      {error && <ErrorNote message={error} />}
+      {loading && <LoadingNote />}
+
+      {!loading && users.length === 0 && (
+        <Panel>
+          <EmptyState message="No users found." />
+        </Panel>
+      )}
+
+      {!loading && users.length > 0 && (
+        <>
+          {/* Phones: stacked cards */}
+          <ul className="space-y-3 md:hidden">
+            {users.map((user) => (
+              <li key={user.id} className="rounded-2xl border border-black/5 bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-brand">{nameOf(user)}</p>
+                    <p className="truncate text-xs text-neutral-500">{user.email}</p>
+                  </div>
+                  <StatusBadge user={user} />
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-neutral-500">
+                  <span className="capitalize">
+                    {user.role} · {new Date(user.createdAt).toLocaleDateString()}
+                  </span>
+                  <Link className="font-medium text-link hover:underline" href={`/admin/users/${user.id}`}>
+                    View
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* md and up: table */}
+          <DataTable
+            className="hidden md:block"
+            head={["Name", "Email", "Role", "Status", "Created", ""]}
+          >
+            {users.map((user) => (
+              <tr key={user.id} className="hover:bg-background/60">
+                <td className={`${cell} font-medium text-brand`}>{nameOf(user)}</td>
+                <td className={cell}>{user.email}</td>
+                <td className={`${cell} capitalize`}>{user.role}</td>
+                <td className={cell}>
+                  <StatusBadge user={user} />
+                </td>
+                <td className={cell}>{new Date(user.createdAt).toLocaleDateString()}</td>
+                <td className={`${cell} text-right`}>
+                  <Link className="font-medium text-link hover:underline" href={`/admin/users/${user.id}`}>
+                    View
+                  </Link>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-t">
-                  <td className="p-3">
-                    {user.profile
-                      ? `${user.profile.firstName} ${user.profile.lastName}`
-                      : "—"}
-                  </td>
-                  <td className="p-3">{user.email}</td>
-                  <td className="p-3 capitalize">{user.role}</td>
-                  <td className="p-3">
-                    {user.deletedAt ? "Deactivated" : "Active"}
-                  </td>
-                  <td className="p-3">
-                    {new Date(user.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="p-3 text-right">
-                    <Link
-                      className="text-primary underline"
-                      href={`/admin/users/${user.id}`}
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </DataTable>
+        </>
       )}
     </div>
   );

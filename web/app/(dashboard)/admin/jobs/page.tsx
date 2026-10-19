@@ -1,14 +1,24 @@
+import type { Metadata } from "next";
 import AdminJobsView from "@/components/admin/admin-job-view";
+import { ErrorNote } from "@/components/layout/page";
 import { adminApi } from "@/lib/admin";
 import { ApiError } from "@/lib/api/api-error";
 
+export const metadata: Metadata = {
+  title: "Jobs",
+  description: "Moderate every job posting on the platform.",
+};
+
+const getData = () => adminApi.jobs();
+
 export default async function AdminJobsPage() {
-  const jobs = await adminApi.jobs();
+  let result: Awaited<ReturnType<typeof getData>> | undefined;
+  let message: string | null = null;
   try {
-    return <AdminJobsView initialJobs={jobs?.data?.data ?? []} />;
+    result = await getData();
   } catch (error) {
-    const message =
-      error instanceof ApiError ? error.message : "Failed to load jobs";
-    return <p className="text-sm text-destructive">{message}</p>;
+    message = error instanceof ApiError ? error.message : "Failed to load jobs";
   }
+  if (!result) return <ErrorNote message={message ?? "Failed to load jobs"} />;
+  return <AdminJobsView initialJobs={result.data?.data ?? []} />;
 }

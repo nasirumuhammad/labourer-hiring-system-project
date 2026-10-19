@@ -24,7 +24,7 @@ export interface DashboardSummary {
   recommendedJobs: (Job & { isSaved: boolean })[];
 }
 
-// A labourer's profile is created in one submission (CreateProfileDto
+// A client's profile is created in one submission (CreateProfileDto
 // requires every field), so completion is binary rather than a partial
 // percentage — there's no "half-filled" state to report.
 const NO_PROFILE_COMPLETION = 0;
@@ -39,7 +39,7 @@ export class DashboardService {
     private readonly userService: UserService,
   ) {}
 
-  async getSummary(labourerId: string): Promise<DashboardSummary> {
+  async getSummary(clientId: string): Promise<DashboardSummary> {
     const recentApplicationsQuery = Object.assign(new PaginationQueryDto(), {
       page: 1,
       limit: RECENT_APPLICATIONS_LIMIT,
@@ -52,12 +52,12 @@ export class DashboardService {
       recentApplications,
       recommendedJobs,
     ] = await Promise.all([
-      this.userService.findById(labourerId),
-      this.applicationService.getStatsForApplicant(labourerId),
-      this.savedJobService.findSavedJobIds(labourerId),
-      this.applicationService.findMine(labourerId, recentApplicationsQuery),
+      this.userService.findById(clientId),
+      this.applicationService.getStatsForApplicant(clientId),
+      this.savedJobService.findSavedJobIds(clientId),
+      this.applicationService.findMine(clientId, recentApplicationsQuery),
       this.recommendationService.getRecommendedJobs(
-        labourerId,
+        clientId,
         RECOMMENDED_JOBS_LIMIT,
       ),
     ]);
