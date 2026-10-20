@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const BASE_URL = process.env.API_URL;
-
-if (!BASE_URL) {
-  throw new Error("API_URL is not defined");
-}
+import { getApiBaseUrl } from "@/lib/api-url";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
 
-  const response = await fetch(`${BASE_URL}/auth/resend-otp`, {
+  const response = await fetch(`${getApiBaseUrl()}/auth/resend-otp`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

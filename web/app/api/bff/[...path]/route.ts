@@ -5,12 +5,7 @@ import {
 } from "@/lib/cookie-config";
 import { refreshTokens } from "@/lib/refresh-session";
 import { NextRequest, NextResponse } from "next/server";
-
-const BASE_URL = process.env.API_URL?.replace(/\/$/, "");
-
-if (!BASE_URL) {
-  throw new Error("API_URL is not defined");
-}
+import { getApiBaseUrl } from "@/lib/api-url";
 
 async function createProxyResponse(response: Response): Promise<NextResponse> {
   const body = await response.text();
@@ -41,7 +36,7 @@ async function bffRequest(
 
     const queryString = new URL(request.url).search;
 
-    return fetch(`${BASE_URL}/${endpoint}${queryString}`, {
+    return fetch(`${getApiBaseUrl()}/${endpoint}${queryString}`, {
       headers,
       body,
       cache: "no-store",

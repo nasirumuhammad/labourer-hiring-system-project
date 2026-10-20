@@ -1,11 +1,6 @@
 import { ACCESS_TOKEN_COOKIE } from "@/lib/cookie-config";
 import { NextRequest } from "next/server";
-
-const BASE_URL = process.env.API_URL?.replace(/\/$/, "");
-
-if (!BASE_URL) {
-  throw new Error("API_URL is not defined");
-}
+import { getApiBaseUrl } from "@/lib/api-url";
 
 export async function GET(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
@@ -14,7 +9,7 @@ export async function GET(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const upstream = await fetch(`${BASE_URL}/applications/stream`, {
+  const upstream = await fetch(`${getApiBaseUrl()}/applications/stream`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "text/event-stream",

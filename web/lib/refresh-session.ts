@@ -1,10 +1,5 @@
 import { TokenPair } from "./cookie-config";
-
-const BASE_URL = process.env.API_URL;
-
-if (!BASE_URL) {
-  throw new Error("API_URL is not defined");
-}
+import { getApiBaseUrl } from "./api-url";
 
 type ApiResponse<T> = {
   message?: string;
@@ -15,8 +10,12 @@ type ApiResponse<T> = {
 export async function refreshTokens(
   refreshToken: string,
 ): Promise<TokenPair | null> {
+  // Outside the try block: a missing API_URL must fail loudly, not read as
+  // "session expired".
+  const baseUrl = getApiBaseUrl();
+
   try {
-    const response = await fetch(`${BASE_URL}/auth/refresh`, {
+    const response = await fetch(`${baseUrl}/auth/refresh`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
