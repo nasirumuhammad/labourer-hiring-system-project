@@ -7,12 +7,29 @@ import { refreshTokens } from "@/lib/refresh-session";
 import { NextRequest, NextResponse } from "next/server";
 import { getApiBaseUrl } from "@/lib/api-url";
 
+// fetch() has already decoded the upstream body, so forwarding the upstream
+// encoding/length headers would make the browser try to decode plain text
+// (and truncate it). Hop-by-hop headers must not be forwarded either.
+const UPSTREAM_ONLY_HEADERS = [
+  "content-encoding",
+  "content-length",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+];
+
+function buildProxyHeaders(upstream: Headers): Headers {
+  const headers = new Headers(upstream);
+  UPSTREAM_ONLY_HEADERS.forEach((name) => headers.delete(name));
+  return headers;
+}
+
 async function createProxyResponse(response: Response): Promise<NextResponse> {
   const body = await response.text();
 
   return new NextResponse(body, {
     status: response.status,
-    headers: response.headers,
+    headers: buildProxyHeaders(response.headers),
   });
 }
 
