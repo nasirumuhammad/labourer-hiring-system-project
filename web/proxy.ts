@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { ACCESS_TOKEN_COOKIE } from "./lib/cookie-config";
+import { getJwtSecretKey } from "./lib/verify-token";
 import { UserRole } from "@labour-hiring/enums";
 
 /**
@@ -12,7 +13,6 @@ import { UserRole } from "@labour-hiring/enums";
  */
 
 const accessToken = ACCESS_TOKEN_COOKIE;
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 const AUTH_ROUTES = [
   "/signin",
@@ -46,8 +46,10 @@ async function readSession(
   const token = request.cookies.get(accessToken)?.value;
   if (!token) return null;
 
+  const secretKey = getJwtSecretKey();
+
   try {
-    const { payload } = await jwtVerify<SessionPayload>(token, JWT_SECRET);
+    const { payload } = await jwtVerify<SessionPayload>(token, secretKey);
     return payload;
   } catch {
     return null;
