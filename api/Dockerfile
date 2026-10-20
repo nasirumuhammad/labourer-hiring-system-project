@@ -28,4 +28,6 @@ RUN pnpm --filter api build
 
 EXPOSE 5000
 
-CMD ["pnpm", "--filter", "api", "start:prod"]
+# Seed is idempotent (skips if the admin/jobs already exist). A failed seed is
+# logged by seed.ts but must not stop the API from starting.
+CMD ["sh", "-c", "pnpm --filter api seed:prod; pnpm --filter api start:prod"]
