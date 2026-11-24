@@ -6,11 +6,7 @@ const durationSchema = z
 
 const envSchema = z.object({
   PORT: z.coerce.number().int().positive(),
-  DB_HOST: z.string().min(1),
-  DB_PORT: z.coerce.number().int().positive(),
-  DB_USERNAME: z.string().min(1),
-  DB_PASSWORD: z.string().min(1),
-  DB_NAME: z.string().min(1),
+  DB_URL: z.string().min(1),
 
   JWT_SECRET: z.string().min(1),
   JWT_EXPIRY: durationSchema,
@@ -25,8 +21,7 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().nonempty(),
   RESEND_EMAIL: z.string().nonempty(),
 
-  REDIS_PORT: z.string().nonempty(),
-  REDIS_HOST: z.string().nonempty(),
+  REDIS_URL: z.string().min(1),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;

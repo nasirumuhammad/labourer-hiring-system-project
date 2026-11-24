@@ -12,10 +12,7 @@ export const REDIS_CLIENT = 'REDIS_CLIENT';
       provide: REDIS_CLIENT,
       inject: [envConfig.KEY],
       useFactory: (env: ConfigType<typeof envConfig>) =>
-        new Redis({
-          host: env.redis.host,
-          port: Number(env.redis.port),
-        }),
+        new Redis(env.redis.url!),
     },
   ],
   exports: [REDIS_CLIENT],

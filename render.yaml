@@ -1,12 +1,4 @@
 services:
-  # ---------- Redis (BullMQ) ----------
-  - type: keyvalue
-    name: labourer-redis
-    plan: free
-    region: oregon
-    maxmemoryPolicy: noeviction
-    ipAllowList: [] # internal access only
-
   # ---------- NestJS API ----------
   - type: web
     name: labourer-api
@@ -21,39 +13,30 @@ services:
       - key: PORT
         value: "5000"
 
-      # Postgres
+      # Postgres (Supabase). Use the SESSION POOLER values from
+      # Supabase > Connect > Session pooler (IPv4-compatible, port 5432):
+      #   DB_HOST     aws-0-<region>.pooler.supabase.com
+      #   DB_PORT     5432
+      #   DB_USERNAME postgres.<project-ref>
+      #   DB_NAME     postgres
+      # The direct host (db.<ref>.supabase.co) is IPv6-only on the free tier.
       - key: DB_HOST
-        fromDatabase:
-          name: labourer-db
-          property: host
+        sync: false
       - key: DB_PORT
-        fromDatabase:
-          name: labourer-db
-          property: port
+        value: "5432"
       - key: DB_USERNAME
-        fromDatabase:
-          name: labourer-db
-          property: user
+        sync: false
       - key: DB_PASSWORD
-        fromDatabase:
-          name: labourer-db
-          property: password
+        sync: false
       - key: DB_NAME
-        fromDatabase:
-          name: labourer-db
-          property: database
+        value: postgres
+      - key: DB_SSL
+        value: "true"
 
-      # Redis
-      - key: REDIS_HOST
-        fromService:
-          type: keyvalue
-          name: labourer-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: labourer-redis
-          property: port
+      # Redis (external provider). Use the TLS URL, e.g. for Upstash:
+      # rediss://default:<URL-ENCODED-PASSWORD>@<host>.upstash.io:6379
+      - key: REDIS_URL
+        sync: false
 
       # JWT
       - key: JWT_SECRET
@@ -106,11 +89,3 @@ services:
           type: web
           name: labourer-api
           envVarKey: JWT_SECRET
-
-# ---------- Postgres ----------
-databases:
-  - name: labourer-db
-    plan: free
-    region: oregon
-    databaseName: labour_hiring
-    user: labour_user

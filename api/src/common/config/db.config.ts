@@ -13,15 +13,11 @@ export const dbConfig: TypeOrmModuleAsyncOptions = {
   inject: [envConfig.KEY],
   useFactory(env: ConfigType<NonNullable<typeof envConfig>>) {
     const {
-      database: { username, password, database, host, port },
+      database: {dbUrl },
     } = env;
     return {
       type: 'postgres',
-      host,
-      port: Number(port),
-      username,
-      password,
-      database,
+     url:dbUrl,
       entities: [
         User,
         RefreshToken,

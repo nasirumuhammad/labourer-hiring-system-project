@@ -21,15 +21,10 @@ export const envConfig = registerAs('env', () => ({
     apiKey: process.env.RESEND_API_KEY,
   },
   redis: {
-    port: process.env.REDIS_PORT,
-    host: process.env.REDIS_HOST,
+    url: process.env.REDIS_URL,
   },
   database: {
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
+    dbUrl: process.env.DB_URL,
   },
 }));
 
